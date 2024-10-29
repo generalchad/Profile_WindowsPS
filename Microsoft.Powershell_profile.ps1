@@ -302,10 +302,34 @@ function vi { nvim @args }
 function vim { nvim @args }
 
 # Enhanced PowerShell Experience
+# Define Gruvbox-inspired custom colors using ANSI escape codes
+$GruvboxYellow = "`e[38;2;250;189;47m"   # Gruvbox yellow for commands
+$GruvboxGreen = "`e[38;2;152;151;26m"    # Gruvbox green for parameters
+$GruvboxCyan = "`e[38;2;131;165;152m"    # Gruvbox cyan for strings
+$GruvboxOrange = "`e[38;2;214;93;14m"    # Gruvbox orange for variables
+$GruvboxMagenta = "`e[38;2;177;98;134m"  # Gruvbox magenta for operators
+$GruvboxRed = "`e[38;2;204;36;29m"       # Gruvbox red for errors
+$GruvboxBlue = "`e[38;2;69;133;136m"     # Gruvbox blue for types
+
 Set-PSReadLineOption -Colors @{
-    Command = 'Yellow'
-    Parameter = 'Green'
-    String = 'DarkCyan'
+    ContinuationPrompt        = "$GruvboxCyan"
+    Emphasis                  = "$GruvboxYellow"
+    Error                     = "$GruvboxRed"
+    Selection                 = "$GruvboxMagenta"
+    Default                   = "$GruvboxBlue"
+    Comment                   = "$GruvboxGreen"
+    Keyword                   = "$GruvboxYellow"
+    String                    = "$GruvboxCyan"
+    Operator                  = "$GruvboxMagenta"
+    Variable                  = "$GruvboxOrange"
+    Command                   = "$GruvboxYellow"
+    Parameter                 = "$GruvboxGreen"
+    Type                      = "$GruvboxBlue"
+    Number                    = "$GruvboxOrange"
+    Member                    = "$GruvboxYellow"
+    InlinePrediction          = "$GruvboxCyan"
+    ListPrediction            = "$GruvboxYellow"
+    ListPredictionSelected    = "$GruvboxOrange"
 }
 
 ## Final Line to set prompt
