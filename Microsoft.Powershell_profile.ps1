@@ -303,6 +303,7 @@ function vim { nvim @args }
 
 # Enhanced PowerShell Experience
 # Define Gruvbox-inspired custom colors using ANSI escape codes
+# TODO: Modularize this later
 $GruvboxYellow = "`e[38;2;250;189;47m"   # Gruvbox yellow for commands
 $GruvboxGreen = "`e[38;2;152;151;26m"    # Gruvbox green for parameters
 $GruvboxCyan = "`e[38;2;131;165;152m"    # Gruvbox cyan for strings
