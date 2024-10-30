@@ -62,6 +62,10 @@ function Update-PowerShell {
 }
 Update-PowerShell 
 
+if (Get-Command ntop -ErrorAction SilentlyContinue) {
+    Set-Alias -Name top -Value ntop
+}
+
 # Admin Check and Prompt Customization
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 function prompt {
