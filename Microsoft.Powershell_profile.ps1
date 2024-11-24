@@ -125,6 +125,20 @@ function Get-Uptime {
 Set-Alias -Name up -Value Get-Uptime
 Set-Alias -Name uptime -Value Get-Uptime
 
+function Get-InstallTime {
+    $registryPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+    $installDateValue = Get-ItemProperty -Path $registryPath -Name "InstallDate"
+    $installDate = [System.DateTime]::UnixEpoch.AddSeconds($installDateValue.InstallDate)
+    $operationalTime = (Get-Date) - $installDate
+
+    Write-Output ("Install Date: {0}" -f $installDate)
+    Write-Output ("Operational Time: {0} days, {1} hours, {2} minutes" -f `
+        [int]$operationalTime.TotalDays, $operationalTime.Hours, $operationalTime.Minutes)
+}
+
+Set-Alias -Name instime -Value Get-InstallTime
+Set-Alias -Name installtime -Value Get-InstallTime
+
 function unzip ($file) {
     Write-Output("Extracting", $file, "to", $pwd)
     $fullFile = Get-ChildItem -Path $pwd -Filter $file | ForEach-Object { $_.FullName }
@@ -314,6 +328,7 @@ Set-PSReadLineOption -Colors @{
 ## Final Line to set prompt
 try {
     oh-my-posh init pwsh --config "$HOME\Documents\PowerShell\Themes\gruvbox.omp.json" | Invoke-Expression
+    & winfetch
 }
 catch {
     Write-Host "oh-my-posh failed to run: $_"
