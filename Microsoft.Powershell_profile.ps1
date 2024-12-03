@@ -2,24 +2,7 @@
 ### Version 1.03 - Refactored
 
 # Initial GitHub.com connectivity check with 1 second timeout
-function Test-GitHubConnection {
-    param (
-        [string]$ComputerName = "github.com",
-        [int]$Port = 443,
-        [int]$Timeout = 1000
-    )
 
-    try {
-        $client = New-Object System.Net.Sockets.TcpClient
-        $asyncResult = $client.BeginConnect($ComputerName, $Port, $null, $null)
-        $success = $asyncResult.AsyncWaitHandle.WaitOne($Timeout, $false)
-        $client.Close()
-        return $success
-    } catch {
-        return $false
-    }
-}
-$global:canConnectToGitHub = Test-GitHubConnection
 
 # Import Modules and External Profiles
 # Ensure Terminal-Icons module is installed before importing
@@ -282,11 +265,7 @@ function reset {
             Write-Host "winfetch failed to run: $_"
         }
     }
-    try {
-        z ~
-    } catch {
-        Write-Host "Failed to navigate to home directory: $_"
-    }
+    Set-Location $HOME
 }
 
 function vi { nvim @args }
