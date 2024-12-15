@@ -244,6 +244,15 @@ function sysinfo { Get-ComputerInfo }
 # Networking Utilities
 function flushdns { Clear-DnsClientCache }
 
+function speedtest {
+    if (Get-Command librespeed-cli -ErrorAction SilentlyContinue) {
+        librespeed-cli
+    } else {
+        Write-Error "librespeed-cli is not installed."
+    }
+}
+Set-Alias -Name speed -Value speedtest
+
 # Clipboard Utilities
 function cpy { Set-Clipboard $args[0] }
 
