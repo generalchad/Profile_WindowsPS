@@ -1,7 +1,7 @@
 ### PowerShell Profile Refactor
 ### Version 1.03 - Refactored
 
-# GitHub Connection Check
+#region GitHub Check
 try {
     $null = Invoke-RestMethod -Uri "https://github.com" -ConnectionTimeoutSeconds 1 -ErrorAction SilentlyContinue
     $global:canConnectToGitHub = $true
@@ -94,8 +94,11 @@ function Edit-Profile {
 }
 
 function Sync-Profile {
-    . $profile
+    . $PROFILE
 }
+Set-Alias -Name Reload-Profile -Value Sync-Profile
+Set-Alias -Name reload -Value Sync-Profile
+Set-Alias -Name reset -Value Sync-Profile
 
 function touch($file) {
     New-Item -ItemType File -Path $file -Force | Out-Null
@@ -275,12 +278,6 @@ function pst { Get-Clipboard }
 function py { python @args }
 
 function quit { exit }
-
-function Reset-Profile {
-    . $PROFILE
-}
-Set-Alias -Name reload -Value Reset-Profile
-Set-Alias -Name reset -Value Reset-Profile
 
 function vi { nvim @args }
 
