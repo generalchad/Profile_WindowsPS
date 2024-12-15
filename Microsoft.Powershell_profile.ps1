@@ -21,6 +21,18 @@ if (Test-Path($ChocolateyProfile)) {
 }
 
 function Update-PowerShell {
+<#
+.SYNOPSIS
+    Checks for PowerShell updates and installs them if needed.
+
+.DESCRIPTION
+    This function checks if a newer version of PowerShell is available on Github
+    and if so uses winget to install it.
+
+.NOTES
+    This function relies on the global variable $global:canConnectToGitHub to be set
+    beforehand to determine if a connection is possible.
+#>
     if (-not $global:canConnectToGitHub) {
         Write-Host "Skipping PowerShell update check due to GitHub.com not responding within 1 second." -ForegroundColor Yellow
         return
