@@ -8,6 +8,7 @@ try {
 } catch {
     Write-Host "Failed to connect to GitHub.com. Error: $_" -ForegroundColor Red
 }
+#endregion
 
 # Import Modules and External Profiles
 # Ensure Terminal-Icons module is installed before importing
