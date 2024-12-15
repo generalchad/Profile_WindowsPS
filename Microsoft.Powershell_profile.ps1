@@ -246,7 +246,7 @@ function flushdns { Clear-DnsClientCache }
 
 function speedtest {
     if (Get-Command librespeed-cli -ErrorAction SilentlyContinue) {
-        librespeed-cli
+        librespeed-cli $args[0]
     } else {
         Write-Error "librespeed-cli is not installed."
     }
