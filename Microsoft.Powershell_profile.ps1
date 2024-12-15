@@ -1,52 +1,33 @@
 ### PowerShell Profile Refactor
 ### Version 1.03 - Refactored
 
-#region GitHub Check
-try {
-    $null = Invoke-RestMethod -Uri "https://github.com" -ConnectionTimeoutSeconds 1 -ErrorAction SilentlyContinue
-    $global:canConnectToGitHub = $true
-} catch {
-    Write-Host "Failed to connect to GitHub.com. Error: $_" -ForegroundColor Red
+#region Github Connection
+function Test-GithubConnection {
+    try {
+        $null = Invoke-RestMethod -Uri "https://github.com" -ConnectionTimeoutSeconds 1 -ErrorAction Stop
+        return $true
+    } catch {
+        Write-Host "Failed to connect to GitHub.com. Error: $_" -ForegroundColor Red
+        return $false
+    }
 }
 #endregion
 
-# Import Modules and External Profiles
-# Ensure Terminal-Icons module is installed before importing
-if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
-    Install-Module -Name Terminal-Icons -Scope CurrentUser -Force -SkipPublisherCheck
-}
-Import-Module -Name Terminal-Icons
-
+#region PowerShell Updates
 function Update-PowerShell {
-<#
-.SYNOPSIS
-    Checks for PowerShell updates and installs them if needed.
-
-.DESCRIPTION
-    This function checks if a newer version of PowerShell is available on Github
-    and if so uses winget to install it.
-
-.NOTES
-    This function relies on the global variable $global:canConnectToGitHub to be set
-    beforehand to determine if a connection is possible.
-#>
-    if (-not $global:canConnectToGitHub) {
-        Write-Host "Skipping PowerShell update check due to GitHub.com not responding within 1 second." -ForegroundColor Yellow
+    if (-not (Test-GithubConnection)) {
+        Write-Host "Unable to check for PowerShell updates. Please check your internet connection." -ForegroundColor Yellow
         return
     }
 
     try {
         Write-Host "Checking for PowerShell updates..." -ForegroundColor Cyan
-        $updateNeeded = $false
         $currentVersion = $PSVersionTable.PSVersion.ToString()
         $gitHubApiUrl = "https://api.github.com/repos/PowerShell/PowerShell/releases/latest"
         $latestReleaseInfo = Invoke-RestMethod -Uri $gitHubApiUrl
         $latestVersion = $latestReleaseInfo.tag_name.Trim('v')
+        
         if ($currentVersion -lt $latestVersion) {
-            $updateNeeded = $true
-        }
-
-        if ($updateNeeded) {
             Write-Host "Updating PowerShell..." -ForegroundColor Yellow
             winget upgrade "Microsoft.PowerShell" --accept-source-agreements --accept-package-agreements
             Write-Host "PowerShell has been updated. Please restart your shell to reflect changes" -ForegroundColor Magenta
@@ -57,7 +38,14 @@ function Update-PowerShell {
         Write-Error "Failed to update PowerShell. Error: $_"
     }
 }
-Update-PowerShell 
+Update-PowerShell
+#endregion
+
+# Ensure Terminal-Icons module is installed before importing
+if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
+    Install-Module -Name Terminal-Icons -Scope CurrentUser -Force -SkipPublisherCheck
+}
+Import-Module -Name Terminal-Icons
 
 if (Get-Command ntop -ErrorAction SilentlyContinue) {
     Set-Alias -Name top -Value ntop
