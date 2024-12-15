@@ -1,8 +1,13 @@
 ### PowerShell Profile Refactor
 ### Version 1.03 - Refactored
 
-# Initial GitHub.com connectivity check with 1 second timeout
-
+# GitHub Connection Check
+try {
+    $null = Invoke-RestMethod -Uri "https://github.com" -ConnectionTimeoutSeconds 1 -ErrorAction SilentlyContinue
+    $global:canConnectToGitHub = $true
+} catch {
+    Write-Host "Failed to connect to GitHub.com. Error: $_" -ForegroundColor Red
+}
 
 # Import Modules and External Profiles
 # Ensure Terminal-Icons module is installed before importing
@@ -262,20 +267,11 @@ function py { python @args }
 
 function quit { exit }
 
-function reset {
-    param(
-        [switch]$NoWinfetch
-    )
-    Clear-Host
-    if (-not $NoWinfetch) {
-        try {
-            winfetch
-        } catch {
-            Write-Host "winfetch failed to run: $_"
-        }
-    }
-    Set-Location $HOME
+function Reset-Profile {
+    . $PROFILE
 }
+Set-Alias -Name reload -Value Reset-Profile
+Set-Alias -Name reset -Value Reset-Profile
 
 function vi { nvim @args }
 
