@@ -157,6 +157,7 @@ function hb {
         Write-Error "Failed to upload the document. Error: $_"
     }
 }
+
 function grep($regex, $dir) {
     if ( $dir ) {
         Get-ChildItem $dir | select-string $regex
