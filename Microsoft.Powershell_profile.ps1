@@ -14,28 +14,41 @@ function Test-GithubConnection {
 #endregion
 
 #region PowerShell Updates
-function Update-PowerShell {
+function Get-LatestPowerShellVersion {
     if (-not (Test-GithubConnection)) {
         Write-Host "Unable to check for PowerShell updates. Please check your internet connection." -ForegroundColor Yellow
         return
     }
-
     try {
-        Write-Host "Checking for PowerShell updates..." -ForegroundColor Cyan
-        $currentVersion = $PSVersionTable.PSVersion.ToString()
         $gitHubApiUrl = "https://api.github.com/repos/PowerShell/PowerShell/releases/latest"
         $latestReleaseInfo = Invoke-RestMethod -Uri $gitHubApiUrl
-        $latestVersion = $latestReleaseInfo.tag_name.Trim('v')
-        
-        if ($currentVersion -lt $latestVersion) {
-            Write-Host "Updating PowerShell..." -ForegroundColor Yellow
-            winget upgrade "Microsoft.PowerShell" --accept-source-agreements --accept-package-agreements
-            Write-Host "PowerShell has been updated. Please restart your shell to reflect changes" -ForegroundColor Magenta
-        } else {
-            Write-Host "Your PowerShell is up to date." -ForegroundColor Green
-        }
+        $latestVersionString = $latestReleaseInfo.tag_name.TrimStart('v')
+        $latestVersion = [Version]$latestVersionString
+        return $latestVersion
     } catch {
-        Write-Error "Failed to update PowerShell. Error: $_"
+        Write-Error "Failed to check for PowerShell updates. Error: $_" -ErrorAction Continue
+        return $null
+    }
+}
+
+function Update-PowerShell {
+    $latestVersion = Get-LatestPowerShellVersion
+    if ($null -eq $latestVersion) {
+        Write-Error "Unable to check for PowerShell updates. Please check your internet connection." -ErrorAction Continue
+        return
+    }
+    $currentVersion = $PSVersionTable.PSVersion
+    if ($currentVersion -ge $latestVersion) {
+        Write-Host "PowerShell is already up to date." -ForegroundColor Green
+        Write-Debug "Current version: $currentVersion"
+        return
+    } else {
+        Write-Host "PowerShell is out of date. Current version: $currentVersion. Latest version: $latestVersion" -ForegroundColor Yellow
+        $confirmUpdate = Read-Host "Do you want to update PowerShell? (Y/N)"
+        if ($confirmUpdate.ToLower() -eq "y") {
+            winget upgrade -e --id="Microsoft.PowerShell" --accept-source-agreements --accept-package-agreements
+            Write-Host "PowerShell has been updated to version $latestVersion" -ForegroundColor Green
+        }
     }
 }
 Update-PowerShell
