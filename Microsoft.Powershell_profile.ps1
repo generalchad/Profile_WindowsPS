@@ -15,6 +15,7 @@ function Test-GithubConnection {
 
 #region PowerShell Updates
 function Get-LatestPowerShellVersion {
+    Write-Verbose "Checking for PowerShell updates..."
     if (-not (Test-GithubConnection)) {
         Write-Host "Unable to check for PowerShell updates. Please check your internet connection." -ForegroundColor Yellow
         return
