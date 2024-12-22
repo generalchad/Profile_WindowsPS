@@ -17,7 +17,7 @@ function Test-GithubConnection {
 function Get-LatestPowerShellVersion {
     Write-Verbose "Checking for PowerShell updates..."
     if (-not (Test-GithubConnection)) {
-        Write-Host "Unable to check for PowerShell updates. Please check your internet connection." -ForegroundColor Yellow
+        Write-Error "Unable to check for PowerShell updates. Please check your internet connection." -ErrorAction Continue
         return
     }
     try {
@@ -40,7 +40,7 @@ function Update-PowerShell {
     }
     $currentVersion = $PSVersionTable.PSVersion
     if ($currentVersion -ge $latestVersion) {
-        Write-Host "PowerShell is already up to date." -ForegroundColor Green
+        Write-Host "PowerShell is up to date." -ForegroundColor Green
         Write-Debug "Current version: $currentVersion"
         return
     } else {
