@@ -414,7 +414,7 @@ function New-Hastebin {
     )
     
     if (-not (Test-Path $FilePath)) {
-        Write-Error "File path does not exist."
+        Write-Error "File path does not exist." -ErrorAction Continue
         return
     }
     
@@ -425,8 +425,10 @@ function New-Hastebin {
         $hasteKey = $response.key
         $url = "http://bin.christitus.com/$hasteKey"
         Write-Output $url
+    } catch [System.Net.WebException] {
+        Write-Error "New-Hastebin: Unexpected network error: $($_.Exception.Message)" -ErrorAction Continue
     } catch {
-        Write-Error "Failed to upload the document. Error: $_"
+        Write-Error "New-Hastebin: An unexpected error occurred: $($_.Exception.Message)" -ErrorAction Continue
     }
 }
 Set-Alias -Name hb -Value New-Hastebin
@@ -439,7 +441,13 @@ function export($name, $value) {
     Set-Item -Force -Path "env:$name" -Value $value;
 }
 
-function py { python @args }
+function py { 
+    try {
+        python @args
+    } catch {
+        Write-Error "Failed to run Python: $_" -ErrorAction Continue
+    }
+}
 
 function quit { exit }
 #endregion
