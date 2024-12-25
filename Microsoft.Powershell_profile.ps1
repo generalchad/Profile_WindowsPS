@@ -108,7 +108,7 @@ $EDITOR = if (Test-CommandExists nvim) { 'nvim' }
 Set-Alias -Name vim -Value $EDITOR
 
 function Edit-Profile {
-    vim $PROFILE.CurrentUserAllHosts
+    vim $PROFILE
 }
 Set-Alias -Name ep -Value Edit-Profile
 
