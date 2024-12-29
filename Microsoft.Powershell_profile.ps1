@@ -333,7 +333,18 @@ function Stop-ProcessByName {
 
         if ($processes) {
             if ($PSCmdlet.ShouldProcess("Processes matching '$item'","Stop")) {
+                $processInfo = $processes | Select-Object ProcessName, Id, Path
                 $processes | Stop-Process
+
+                Write-Host "`nStopped all processes matching '$item'" -ForegroundColor Green
+                Write-Host "`nDetails of stopped processes:" -ForegroundColor Cyan
+                
+                $processInfo | ForEach-Object {
+                    Write-Host ("Process: {0} (PID: {1})" -f $_.ProcessName, $_.Id) -ForegroundColor Yellow
+                    if ($_.Path) {
+                        Write-Host ("Path: {0}" -f $_.Path) -ForegroundColor Gray
+                    }
+                }
             }
         } else {
             Write-Warning "No processes matching '$item' found."
