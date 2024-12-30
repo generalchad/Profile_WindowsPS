@@ -336,8 +336,8 @@ function Stop-ProcessByName {
                 $processInfo = $processes | Select-Object ProcessName, Id, Path
                 $processes | Stop-Process
 
-                Write-Host "`nStopped all processes matching '$item'" -ForegroundColor Green
-                Write-Host "`nDetails of stopped processes:" -ForegroundColor Cyan
+                Write-Host "Stopped all processes matching '$item'" -ForegroundColor Green
+                Write-Host "Details of stopped processes:" -ForegroundColor Cyan
                 
                 $processInfo | ForEach-Object {
                     Write-Host ("Process: {0} (PID: {1})" -f $_.ProcessName, $_.Id) -ForegroundColor Yellow
