@@ -1,7 +1,7 @@
 #region Imports
 <# Terminal Icons #>
 if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
-    Install-Module -Name Terminal-Icons -Scope CurrentUser -Force -SkipPublisherCheck
+    Install-Module -Name Terminal-Icons -Repository PSGallery
 }
 Import-Module -Name Terminal-Icons
 
@@ -141,9 +141,11 @@ Set-Alias -Name find -Value Find-File
 function Find-Text {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory=$true, Position=0)]
+        [Parameter(Mandatory, Position=0, ValueFromPipeline)]
+        [ValidateNotNullOrEmpty()]
         [string]$Regex,
-        [Parameter(Position=1)]
+
+        [Parameter(ValueFromPipeline)]
         [string[]]$Path = @()
     )
 
