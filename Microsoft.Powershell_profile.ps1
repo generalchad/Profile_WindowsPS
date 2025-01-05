@@ -221,6 +221,8 @@ function New-Folder {
             -ItemType Directory `
             -Force:$PSBoundParameters.ContainsKey('Force') `
             | Out-Null
+
+            Write-Debug "New-Folder: Created new folder at $Path"
     } catch [System.UnauthorizedAccessException] {
         Write-Error "New-Folder: You do not have the correct permissions: $_" -ErrorAction Continue
         return
