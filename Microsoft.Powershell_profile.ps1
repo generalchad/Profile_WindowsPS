@@ -132,6 +132,8 @@ function Find-File {
         [string]$Name
     )
 
+    Write-Debug "Find-File: Searching for files matching '$Name'"
+
     Get-ChildItem -Recurse -Filter "*$Name*" -ErrorAction SilentlyContinue | 
         Select-Object -ExpandProperty FullName
 }
@@ -148,6 +150,8 @@ function Find-Text {
         [Parameter(ValueFromPipeline)]
         [string[]]$Path = @()
     )
+
+    Write-Debug "Find-Text: Searching for text matching '$Regex' in $Path"
 
     if ($Path.Count -eq 0) {
         $input | Select-String $Regex
