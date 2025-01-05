@@ -426,7 +426,7 @@ function sysinfo { Get-ComputerInfo }
 function New-Hastebin {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [Parameter(Mandatory, ValueFromPipeline)]
         [string]$FilePath
     )
     
