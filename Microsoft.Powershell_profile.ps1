@@ -182,6 +182,7 @@ function New-Folder {
 
     <# !!! Warning: Nonstandard nonsense !!! #>
 
+    # If the function is invoked as `mkcd`, change the location to the new folder after creation
     if ($MyInvocation.InvocationName -eq "mkcd") {
         Set-Location $Path
     }
