@@ -162,12 +162,36 @@ function Find-Text {
 Set-Alias -Name grep -Value Find-Text
 
 function New-File {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
-        [string]$Path = ".\New file"
+        [Parameter(Position=0, ValueFromPipeline)]
+        [string]$Path = ".\New file",
+
+        [Parameter(Position=1)]
+        [switch]$Hidden,
+
+        [Parameter(Position=2)]
+        [switch]$System
     )
 
-    New-Item -Path $Path -ItemType File | Out-Null
+    process {
+        try {
+            Write-Debug "New-File: Creating new file at $Path"
+            Write-Debug "Hidden? $Hidden"
+            Write-Debug "System? $System"
+            
+            New-Item `
+            -Path $Path `
+            -ItemType File `
+            -Force:$PSBoundParameters.ContainsKey('Force') `
+            | Out-Null
+        } catch [System.UnauthorizedAccessException] {
+            Write-Error "New File: You do not have the correct permissions: $_"
+        } catch {
+            Write-Error "New File: An unexpected error occurred: $_"
+        }
+    }
+
 }
 Set-Alias -Name touch -Value New-File
 Set-Alias -Name nf -Value New-File
@@ -188,6 +212,7 @@ function New-Folder {
     }
 
     <# !!! /Warning: Nonstandard nonsense !!! #>
+    }
 }
 Set-Alias -Name mkcd -Value New-Folder
 Set-Alias -Name mkdir -Value New-Folder
