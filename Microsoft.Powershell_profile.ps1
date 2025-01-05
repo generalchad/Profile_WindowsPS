@@ -238,6 +238,19 @@ function lazyg {
 }
 #endregion
 
+#region Miscellaneous Shortcuts & Utilities
+function Invoke-PeriodicTable {
+    if (Test-CommandExists "periodic-table-cli") {
+        periodic-table-cli
+    } else {
+        Write-Error "periodic-table-cli is not installed."
+    }
+}
+Set-Alias -Name pt -Value Invoke-PeriodicTable
+Set-Alias -Name ptable -Value Invoke-PeriodicTable
+Set-Alias -Name ptoe -Value Invoke-PeriodicTable
+#endregion
+
 #region Navigation Shortcuts
 function Invoke-Explorer {
     [CmdletBinding()]
