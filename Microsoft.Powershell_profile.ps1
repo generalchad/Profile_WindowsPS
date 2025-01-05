@@ -199,10 +199,43 @@ Set-Alias -Name nf -Value New-File
 function New-Folder {
     [CmdletBinding()]
     param(
-        [string]$Path = ".\New folder"
-    )
+        [Parameter(Position=0, ValueFromPipeline)]
+        [string]$Path = ".\New folder",
 
-    New-Item -Path $Path -ItemType Directory | Out-Null
+        [Parameter(Position=1)]
+        [switch]$Hidden,
+
+        [Parameter(Position=2)]
+        [switch]$System
+    )
+    
+    process {
+    try {
+        Write-Debug "New-Folder: Creating new folder at $Path"
+        Write-Debug "Hidden? $Hidden"
+        Write-Debug "System? $System"
+
+        $NewFolder = `
+            New-Item `
+            -Path $Path `
+            -ItemType Directory `
+            -Force:$PSBoundParameters.ContainsKey('Force') `
+            | Out-Null
+    } catch [System.UnauthorizedAccessException] {
+        Write-Error "New-Folder: You do not have the correct permissions: $_" -ErrorAction Continue
+        return
+    } catch {
+        Write-Error "New-Folder: An unexpected error occurred: $_" -ErrorAction Continue
+        return
+    }
+
+    if ($Hidden) {
+        $NewFolder.Attributes += [System.IO.FileAttributes]::Hidden
+    }
+
+    if ($System) {
+        $NewFolder.Attributes += [System.IO.FileAttributes]::System
+    }
 
     <# !!! Warning: Nonstandard nonsense !!! #>
 
