@@ -25,7 +25,8 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
 }
 #endregion
 
-#region Color & Theme
+#region Colors & Theming
+<# Color Definitions #>
 $GruvboxYellow = "`e[38;2;250;189;47m"   # Gruvbox yellow for commands
 $GruvboxGreen = "`e[38;2;152;151;26m"    # Gruvbox green for parameters
 $GruvboxCyan = "`e[38;2;131;165;152m"    # Gruvbox cyan for strings
@@ -54,6 +55,40 @@ Set-PSReadLineOption -Colors @{
     ListPrediction            = "$GruvboxYellow"
     ListPredictionSelected    = "$GruvboxOrange"
 }
+#endregion
+
+#region Console Configuration
+<# Command History Configuration #>
+Set-PSReadLineOption -AddToHistoryHandler {
+    param($Line)
+    $sensitive = @( "password", "secret", "key", "apikey", "token", "connectionstring" )
+    $hasSensitive = $sensitive | Where-Object { $Line -like "*$_*" }
+    if ($hasSensitive) {
+        return
+    }
+}
+Set-PSReadLineOption -MaximumHistoryCount 10000
+Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+
+<# Custom Autocompletes #>
+$autocompleteBlock = {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $customCompletions = @{
+        'docker' = @('run', 'build', 'push', 'pull', 'exec', 'stop', 'start', 'restart', 'logs', 'ps', 'images', 'rmi', 'tag', 'commit', 'save', 'load', 'network', 'volume', 'help')
+        'git' = @('add', 'commit', 'push', 'pull', 'clone', 'status', 'branch', 'checkout', 'merge', 'rebase', 'reset', 'log', 'diff', 'tag', 'stash', 'fetch', 'remote', 'config', 'init', 'help')
+        'npm' = @('install', 'uninstall', 'update', 'init', 'run', 'test', 'start', 'stop', 'build', 'publish', 'pack', 'link', 'unlink', 'cache', 'config', 'help')
+    }
+
+    $command = $commandAst.CommandElements[0].Value
+    if ($customCompletions.ContainsKey($command)) {
+        $customCompletions[$command] | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) 
+        }
+    }
+}
+Register-ArgumentCompleter -Native -CommandName `
+    'docker', 'git', 'npm' `
+    -ScriptBlock $autocompleteBlock
 #endregion
 
 #region Core Utilities
