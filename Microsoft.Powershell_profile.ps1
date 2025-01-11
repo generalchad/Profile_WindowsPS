@@ -290,13 +290,13 @@ Set-Alias -Name mkcd -Value New-Folder
 Set-Alias -Name mkdir -Value New-Folder
 
 function head {
-  param($Path, $n = 10)
-  Get-Content $Path -Head $n
+    param($Path, $n = 10)
+    Get-Content $Path -Head $n
 }
 
 function tail {
-  param($Path, $n = 10)
-  Get-Content $Path -Tail $n
+    param($Path, $n = 10)
+    Get-Content $Path -Tail $n
 }
 
 function df {
