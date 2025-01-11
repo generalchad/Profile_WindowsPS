@@ -435,9 +435,9 @@ Update-PowerShell
 
 #region Process Management
 function Stop-ProcessByName {
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
-        [Parameter(Mandatory=$true, ValueFromRemainingArguments=$true)]
+        [Parameter(Mandatory, ValueFromRemainingArguments)]
         [string[]]$NameOrPid
     )
 
