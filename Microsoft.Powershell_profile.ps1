@@ -377,7 +377,7 @@ function Test-NetSpeed {
     if (Test-CommandExists librespeed-cli) {
         librespeed-cli $args[0]
     } else {
-        Write-Error "librespeed-cli is not installed."
+        Write-Error "Test-NetSpeed: librespeed-cli is not installed."
     }
 }
 Set-Alias -Name speed -Value Test-NetSpeed
