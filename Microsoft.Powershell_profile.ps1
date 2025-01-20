@@ -413,7 +413,7 @@ function Get-LatestPowerShellVersion {
 function Update-PowerShell {
     $LatestVersion = Get-LatestPowerShellVersion
     if ($null -eq $LatestVersion) {
-        Write-Error "Unable to check for PowerShell updates. Please check your internet connection." -ErrorAction Continue
+        Write-Host "Unable to check for PowerShell updates at this time." -ForegroundColor Yellow
         return
     }
     $CurrentVersion = $PSVersionTable.PSVersion
