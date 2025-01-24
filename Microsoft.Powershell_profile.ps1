@@ -407,6 +407,9 @@ function Get-LatestPowerShellVersion {
 }
 
 function Update-PowerShell {
+    [CmdletBinding()]
+    param()
+
     $LatestVersion = Get-LatestPowerShellVersion
     if ($null -eq $LatestVersion) {
         Write-Host "Unable to check for PowerShell updates at this time." -ForegroundColor Yellow
@@ -421,6 +424,10 @@ function Update-PowerShell {
         Write-Host "PowerShell is out of date. Current version: $CurrentVersion. Latest version: $LatestVersion" -ForegroundColor Yellow
         $ConfirmUpdate = Read-Host "Do you want to update PowerShell? (Y/N)"
         if ($ConfirmUpdate.ToLower() -eq "y") {
+            if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())::IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+                Write-Error "Update-PowerShell: This function must be run as an administrator." -ErrorAction Continue
+                return
+            }
             winget upgrade -e --id="Microsoft.PowerShell" --accept-source-agreements --accept-package-agreements
             Write-Host "PowerShell has been updated to version $LatestVersion" -ForegroundColor Green
         }
