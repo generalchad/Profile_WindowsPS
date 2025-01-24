@@ -217,11 +217,12 @@ function New-File {
             Write-Debug "Hidden? $Hidden"
             Write-Debug "System? $System"
             
-            New-Item `
-            -Path $Path `
-            -ItemType File `
-            -Force:$PSBoundParameters.ContainsKey('Force') `
-            | Out-Null
+            $NewItem = New-Item -Path $Path -ItemType File -Force
+
+            if ($Hidden) { $NewItem.Attributes += "Hidden" }
+            if ($System) { $NewItem.Attributes += "System" }
+
+            Write-Debug "New-File: Created new file at $Path"
         } catch [System.UnauthorizedAccessException] {
             Write-Error "New File: You do not have the correct permissions: $_"
         } catch {
@@ -252,28 +253,18 @@ function New-Folder {
         Write-Debug "Hidden? $Hidden"
         Write-Debug "System? $System"
 
-        $NewFolder = `
-            New-Item `
-            -Path $Path `
-            -ItemType Directory `
-            -Force:$PSBoundParameters.ContainsKey('Force') `
-            | Out-Null
+        $NewFolder = New-Item -Path $Path -ItemType Directory -Force
 
-            Write-Debug "New-Folder: Created new folder at $Path"
+        if ($Hidden) { $NewFolder.Attributes += "Hidden" }
+        if ($System) { $NewFolder.Attributes += "System" }
+
+        Write-Debug "New-Folder: Created new folder at $Path"
     } catch [System.UnauthorizedAccessException] {
         Write-Error "New-Folder: You do not have the correct permissions: $_" -ErrorAction Continue
         return
     } catch {
         Write-Error "New-Folder: An unexpected error occurred: $_" -ErrorAction Continue
         return
-    }
-
-    if ($Hidden) {
-        $NewFolder.Attributes += [System.IO.FileAttributes]::Hidden
-    }
-
-    if ($System) {
-        $NewFolder.Attributes += [System.IO.FileAttributes]::System
     }
 
     <# !!! Warning: Nonstandard nonsense !!! #>
