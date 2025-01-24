@@ -299,6 +299,11 @@ function sed($file, $find, $replace) {
 }
 
 function unzip ($file) {
+    if (-not (Test-Path $file)) {
+        Write-Error "unzip: File not found: $file" -ErrorAction Continue
+        return 
+    }
+
     Write-Output("Extracting", $file, "to", $pwd)
     $fullFile = Get-ChildItem -Path $pwd -Filter $file | ForEach-Object { $_.FullName }
     Expand-Archive -Path $fullFile -DestinationPath $pwd
