@@ -26,35 +26,18 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
 #endregion
 
 #region Colors & Theming
-<# Color Definitions #>
-$GruvboxYellow = "`e[38;2;250;189;47m"   # Gruvbox yellow for commands
-$GruvboxGreen = "`e[38;2;152;151;26m"    # Gruvbox green for parameters
-$GruvboxCyan = "`e[38;2;131;165;152m"    # Gruvbox cyan for strings
-$GruvboxOrange = "`e[38;2;214;93;14m"    # Gruvbox orange for variables
-$GruvboxMagenta = "`e[38;2;177;98;134m"  # Gruvbox magenta for operators
-$GruvboxRed = "`e[38;2;204;36;29m"       # Gruvbox red for errors
-$GruvboxBlue = "`e[38;2;69;133;136m"     # Gruvbox blue for types
-
-Set-PSReadLineOption -Colors @{
-    ContinuationPrompt        = "$GruvboxCyan"
-    Emphasis                  = "$GruvboxYellow"
-    Error                     = "$GruvboxRed"
-    Selection                 = "$GruvboxMagenta"
-    Default                   = "$GruvboxBlue"
-    Comment                   = "$GruvboxGreen"
-    Keyword                   = "$GruvboxYellow"
-    String                    = "$GruvboxCyan"
-    Operator                  = "$GruvboxMagenta"
-    Variable                  = "$GruvboxOrange"
-    Command                   = "$GruvboxYellow"
-    Parameter                 = "$GruvboxGreen"
-    Type                      = "$GruvboxBlue"
-    Number                    = "$GruvboxOrange"
-    Member                    = "$GruvboxYellow"
-    InlinePrediction          = "$GruvboxCyan"
-    ListPrediction            = "$GruvboxYellow"
-    ListPredictionSelected    = "$GruvboxOrange"
+$PSReadLineOptions = @{
+    Colors = @{
+        Command            = "#fabd2f"
+        Parameter          = "#98971a"
+        String             = "#83a598"
+        Variable           = "#d65d0e"
+    }
+    PredictionSource      = "History"
+    HistoryNoDuplicates   = $true
+    MaximumHistoryCount   = 10000
 }
+Set-PSReadLineOption @PSReadLineOptions
 #endregion
 
 #region Console Configuration
@@ -71,24 +54,16 @@ Set-PSReadLineOption -MaximumHistoryCount 10000
 Set-PSReadLineOption -PredictionSource HistoryAndPlugin
 
 <# Custom Autocompletes #>
-$autocompleteBlock = {
-    param($wordToComplete, $commandAst, $cursorPosition)
-    $customCompletions = @{
-        'docker' = @('run', 'build', 'push', 'pull', 'exec', 'stop', 'start', 'restart', 'logs', 'ps', 'images', 'rmi', 'tag', 'commit', 'save', 'load', 'network', 'volume', 'help')
-        'git' = @('add', 'commit', 'push', 'pull', 'clone', 'status', 'branch', 'checkout', 'merge', 'rebase', 'reset', 'log', 'diff', 'tag', 'stash', 'fetch', 'remote', 'config', 'init', 'help')
-        'npm' = @('install', 'uninstall', 'update', 'init', 'run', 'test', 'start', 'stop', 'build', 'publish', 'pack', 'link', 'unlink', 'cache', 'config', 'help')
-    }
-
-    $command = $commandAst.CommandElements[0].Value
-    if ($customCompletions.ContainsKey($command)) {
-        $customCompletions[$command] | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) 
-        }
-    }
+$completionCommands = @{
+    docker = @('run','build','push','pull')
+    git    = @('add','commit','push','pull')
+    npm    = @('install','run','test')
 }
-Register-ArgumentCompleter -Native -CommandName `
-    'docker', 'git', 'npm' `
-    -ScriptBlock $autocompleteBlock
+
+Register-ArgumentCompleter -CommandName $completionCommands.Keys -ScriptBlock {
+    param($word, $command)
+    $completionCommands[$command] | Where-Object { $_ -like "$word*" }
+}
 #endregion
 
 #region Core Utilities
@@ -433,7 +408,7 @@ function Update-PowerShell {
         }
     }
 }
-Update-PowerShell
+#Update-PowerShell
 #endregion
 
 #region Process Management
