@@ -125,7 +125,12 @@ function Edit-Profile {
 Set-Alias -Name ep -Value Edit-Profile
 
 function Sync-Profile {
+    Write-Debug "Reloading PowerShell profile..."
+    $startTime = Get-Date
     . $PROFILE
+    $endTime = Get-Date
+    $loadTime = ($endTime - $startTime).TotalMilliseconds
+    Write-Host "Profile reloaded in $([math]::Round($loadTime))ms." -ForegroundColor Green
 }
 Set-Alias -Name Reload-Profile -Value Sync-Profile
 Set-Alias -Name reload -Value Sync-Profile
