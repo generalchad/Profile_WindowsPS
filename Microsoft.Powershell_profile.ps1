@@ -576,7 +576,7 @@ function quit { exit }
 #region Initialization
 try {
     oh-my-posh init pwsh --config "$HOME\Documents\PowerShell\Themes\gruvbox.omp.json" | Invoke-Expression
-    & winfetch
+    & fastfetch
 }
 catch {
     Write-Host "oh-my-posh failed to run: $_"
