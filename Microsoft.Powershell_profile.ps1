@@ -119,6 +119,12 @@ Set-Alias -Name edit -Value $EDITOR
 Set-Alias -Name vim -Value $EDITOR
 Set-Alias -Name vi -Value $EDITOR
 
+if (-not (Test-CommandExists code-insiders)) {
+    Set-Alias -Name code-insiders -Value code
+} else {
+    Set-Alias -Name code -Value code-insiders
+}
+
 function Edit-Profile {
     vim $PROFILE
 }
