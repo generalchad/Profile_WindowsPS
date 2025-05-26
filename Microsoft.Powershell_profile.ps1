@@ -11,9 +11,7 @@ if (Get-Command ntop -ErrorAction SilentlyContinue) {
 }
 
 <# zoxide #>
-if (Get-Command zoxide -ErrorAction SilentlyContinue) {
-    Invoke-Expression (& { (zoxide init powershell | Out-String) })
-} else {
+if (-not (Get-Command z -ErrorAction SilentlyContinue) -and -not (Get-Command zoxide -ErrorAction SilentlyContinue)) {
     Write-Host "zoxide command not found. Attempting to install via winget..."
     try {
         winget install -e --id ajeetdsouza.zoxide
@@ -22,6 +20,8 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
     } catch {
         Write-Error "Failed to install zoxide. Error: $_"
     }
+} elseif (Get-Command zoxide -ErrorAction SilentlyContinue) {
+    Invoke-Expression (& { (zoxide init powershell | Out-String) })
 }
 #endregion
 
@@ -585,11 +585,35 @@ function quit { exit }
 #endregion
 
 #region Initialization
+$PS_PROFILE = Join-Path $PSScriptRoot "Profile.ps1"
+if (Test-Path $PS_PROFILE) {
+    Write-Debug "Loading custom profile from $PS_PROFILE"
+    . $PS_PROFILE
+
+    # Determine OMP theme file extension (.omp.json or .omp.yaml)
+    $themeBase = "$HOME\Documents\PowerShell\Themes\$OMP_THEME.omp"
+    if (Test-Path "$themeBase.json") {
+        $themePath = "$themeBase.json"
+    } elseif (Test-Path "$themeBase.yaml") {
+        $themePath = "$themeBase.yaml"
+    } else {
+        $themePath = "$themeBase.json" # fallback, may error
+    }
+
+    oh-my-posh.exe init pwsh --config "$themePath" | Out-String | Invoke-Expression
+} else {
+    Write-Debug "No custom profile found at $PS_PROFILE"
+    try {
+        oh-my-posh init pwsh --config "$HOME\Documents\PowerShell\Themes\gruvbox.omp.json" | Out-String | Invoke-Expression
+    }
+    catch {
+        Write-Host "Oh-My-Posh failed: $_" -ForegroundColor Yellow
+    }
+}
 try {
-    oh-my-posh init pwsh --config "$HOME\Documents\PowerShell\Themes\gruvbox.omp.json" | Invoke-Expression
     & fastfetch
+} catch {
+    Write-Host " fastfetch failed: $_" -ForegroundColor Yellow
 }
-catch {
-    Write-Host "oh-my-posh failed to run: $_"
-}
+
 #endregion
