@@ -19,6 +19,7 @@ $PSReadLineOptions = @{
         Variable           = "#d65d0e"
     }
     PredictionSource      = "History"
+PredictionViewStyle   = "InlineView"
     HistoryNoDuplicates   = $true
     MaximumHistoryCount   = 10000
 }
