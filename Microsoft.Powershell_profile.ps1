@@ -91,14 +91,15 @@ function pst { Get-Clipboard }
 #endregion
 
 #region Editor Config
-$EDITOR = if (Test-CommandExists nvim) { 'nvim' }
-            elseif (Test-CommandExists pvim) { 'pvim' }
-            elseif (Test-CommandExists vim) { 'vim' }
-            elseif (Test-CommandExists vi) { 'vi' }
-            elseif (Test-CommandExists code) { 'code' }
-            elseif (Test-CommandExists notepad++) { 'notepad++' }
-            elseif (Test-CommandExists sublime_text) { 'sublime_text' }
-            else { 'notepad' }
+$editorCommands = @{
+    nvim          = 'nvim'
+    vim           = 'vim'
+    vi            = 'vi'
+    code          = 'code'
+    'notepad++'   = 'notepad++'
+}
+$EDITOR = $editorCommands.Keys | Where-Object { Test-CommandExists $_ } | Select-Object -First 1
+if (-not $EDITOR) { $EDITOR = 'notepad' }
 Set-Alias -Name edit -Value $EDITOR            
 Set-Alias -Name vim -Value $EDITOR
 Set-Alias -Name vi -Value $EDITOR
