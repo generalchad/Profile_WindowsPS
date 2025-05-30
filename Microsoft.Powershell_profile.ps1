@@ -36,8 +36,6 @@ Set-PSReadLineOption -AddToHistoryHandler {
         return
     }
 }
-Set-PSReadLineOption -MaximumHistoryCount 10000
-Set-PSReadLineOption -PredictionSource HistoryAndPlugin
 
 <# Custom Autocompletes #>
 $completionCommands = @{
@@ -602,4 +600,9 @@ try {
     Write-Host " fastfetch failed: $_" -ForegroundColor Yellow
 }
 
+if (-not (Test-CommandExists zoxide)) {
+    Write-Host "zoxide is not installed. Please install it to use zoxide commands." -ForegroundColor Yellow
+} else {
+    Invoke-Expression (& { (zoxide init powershell | Out-String) })
+}
 #endregion
