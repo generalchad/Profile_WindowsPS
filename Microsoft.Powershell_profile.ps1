@@ -570,37 +570,60 @@ function quit { exit }
 #endregion
 
 #region Initialization
-$PS_PROFILE = Join-Path $PSScriptRoot "Profile.ps1"
-if (Test-Path $PS_PROFILE) {
-    Write-Debug "Loading custom profile from $PS_PROFILE"
-    . $PS_PROFILE
+$CustomProfilePath = Join-Path $PSScriptRoot "Profile.ps1" # Renamed for clarity
+if (Test-Path $CustomProfilePath) {
+    Write-Debug "Loading custom profile from $CustomProfilePath"
+    . $CustomProfilePath # Source the other profile script if it exists
 
     # Determine OMP theme file extension (.omp.json or .omp.yaml)
-    $themeBase = "$HOME\Documents\PowerShell\Themes\$OMP_THEME.omp"
+    # Ensure $OMP_THEME is defined, possibly in Profile.ps1 or default here
+    if (-not $OMP_THEME) { $OMP_THEME = "gruvbox" } # Example default
+    $themeBase = Join-Path $HOME "Documents\PowerShell\Themes\$($OMP_THEME).omp" # Safer path join
+    
     if (Test-Path "$themeBase.json") {
         $themePath = "$themeBase.json"
     } elseif (Test-Path "$themeBase.yaml") {
         $themePath = "$themeBase.yaml"
     } else {
-        $themePath = "$themeBase.json" # fallback, may error
+        # Fallback or error if theme file not found
+        Write-Warning "Oh-My-Posh theme for '$OMP_THEME' not found. Using default or expecting error."
+        $themePath = "$themeBase.json" # Will likely fail if $OMP_THEME was not found
     }
 
-    if (-not (Test-CommandExists oh-my-posh)) {
+    if (Test-CommandExists oh-my-posh) { # oh-my-posh command/function/alias exists
+        try {
+            oh-my-posh init pwsh --config "$themePath" | Out-String | Invoke-Expression
+        } catch {
+            Write-Host "Oh-My-Posh (command) failed to initialize: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    } elseif (Test-CommandExists oh-my-posh.exe) { # Fallback to oh-my-posh.exe if the command isn't found
         try {
             oh-my-posh.exe init pwsh --config "$themePath" | Out-String | Invoke-Expression
         } catch {
-            Write-Host "Oh-My-Posh failed: $_" -ForegroundColor Yellow
+            Write-Host "Oh-My-Posh (exe) failed to initialize: $($_.Exception.Message)" -ForegroundColor Yellow
         }
     } else {
         Write-Host "Oh-My-Posh is not installed. Please install it to use custom themes." -ForegroundColor Yellow
     }
 } else {
-    Write-Debug "No custom profile found at $PS_PROFILE"
-    try {
-        oh-my-posh init pwsh --config "$HOME\Documents\PowerShell\Themes\gruvbox.omp.json" | Out-String | Invoke-Expression
+    Write-Debug "No custom profile found at $CustomProfilePath"
+    # Fallback Oh-My-Posh initialization if the custom Profile.ps1 is not found
+    $defaultThemePath = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
+    if (Test-CommandExists oh-my-posh) {
+        try {
+            oh-my-posh init pwsh --config "$defaultThemePath" | Out-String | Invoke-Expression
+        } catch {
+            Write-Host "Oh-My-Posh (command) failed to initialize with default theme: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    } elseif (Test-CommandExists oh-my-posh.exe) {
+        try {
+            oh-my-posh.exe init pwsh --config "$defaultThemePath" | Out-String | Invoke-Expression
+        } catch {
+            Write-Host "Oh-My-Posh (exe) failed to initialize with default theme: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
     }
-    catch {
-        Write-Host "Oh-My-Posh failed: $_" -ForegroundColor Yellow
+    else {
+        Write-Host "Oh-My-Posh is not installed (fallback check). Please install it to use custom themes." -ForegroundColor Yellow
     }
 }
 
