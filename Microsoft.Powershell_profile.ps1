@@ -585,7 +585,15 @@ if (Test-Path $PS_PROFILE) {
         $themePath = "$themeBase.json" # fallback, may error
     }
 
-    oh-my-posh.exe init pwsh --config "$themePath" | Out-String | Invoke-Expression
+    if (-not (Test-CommandExists oh-my-posh)) {
+        try {
+            oh-my-posh.exe init pwsh --config "$themePath" | Out-String | Invoke-Expression
+        } catch {
+            Write-Host "Oh-My-Posh failed: $_" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Oh-My-Posh is not installed. Please install it to use custom themes." -ForegroundColor Yellow
+    }
 } else {
     Write-Debug "No custom profile found at $PS_PROFILE"
     try {
@@ -595,10 +603,15 @@ if (Test-Path $PS_PROFILE) {
         Write-Host "Oh-My-Posh failed: $_" -ForegroundColor Yellow
     }
 }
-try {
-    & fastfetch
-} catch {
-    Write-Host " fastfetch failed: $_" -ForegroundColor Yellow
+
+if (-not (Test-CommandExists fastfetch)) {
+    Write-Host "fastfetch is not installed. Please install it to use fastfetch commands." -ForegroundColor Yellow
+} else {
+    try {
+        & fastfetch
+    } catch {
+        Write-Host "fastfetch failed: $_" -ForegroundColor Yellow
+    }
 }
 
 if (-not (Test-CommandExists zoxide)) {
