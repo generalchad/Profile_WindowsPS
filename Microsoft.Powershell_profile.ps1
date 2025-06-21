@@ -628,7 +628,7 @@ if (Test-Path $CustomProfilePath) {
 }
 
 if (-not (Test-CommandExists fastfetch)) {
-    Write-Host "fastfetch is not installed. Please install it to use fastfetch commands." -ForegroundColor Yellow
+    Write-Host "WARNING: fastfetch is not installed. Please install it to use fastfetch commands." -ForegroundColor Yellow
 } else {
     try {
         & fastfetch
@@ -638,8 +638,13 @@ if (-not (Test-CommandExists fastfetch)) {
 }
 
 if (-not (Test-CommandExists zoxide)) {
-    Write-Host "zoxide is not installed. Please install it to use zoxide commands." -ForegroundColor Yellow
+    Write-Host "WARNING: zoxide is not installed. Please install it to use zoxide commands." -ForegroundColor Yellow
 } else {
     Invoke-Expression (& { (zoxide init powershell | Out-String) })
+}
+
+if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction SilentlyContinue)) {
+    Write-Host "Experimental feature PSFeedbackProvider is not enabled. Enabling it now." -ForegroundColor Yellow
+    Enable-ExperimentalFeature PSFeedbackProvider
 }
 #endregion
