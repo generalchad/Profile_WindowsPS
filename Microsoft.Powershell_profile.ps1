@@ -10,6 +10,10 @@ if (Get-Command ntop -ErrorAction SilentlyContinue) {
     Set-Alias -Name top -Value ntop
 }
 
+#region Aliases
+Set-Alias -Name cheat -Value Get-CheatSh
+Set-Alias -Name tldr -Value Get-CheatSh
+
 #region Colors & Theming
 $PSReadLineOptions = @{
     Colors = @{
