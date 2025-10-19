@@ -1,9 +1,16 @@
-#region Imports
-<# Terminal Icons #>
-if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
-    Install-Module -Name Terminal-Icons -Repository PSGallery
+#region Setup and Imports
+<# PSFeedbackProvider #>
+# This fixes issues with feedback prompts in PowerShell 7.3+
+if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction SilentlyContinue)) {
+    Write-Host "Experimental feature PSFeedbackProvider is not enabled. Enabling it now." -ForegroundColor Yellow
+    Enable-ExperimentalFeature PSFeedbackProvider
 }
-Import-Module -Name Terminal-Icons
+
+<# Terminal Icons #>
+Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action {
+    Import-Module Terminal-Icons
+    Unregister-Event -SourceIdentifier PowerShell.OnIdle
+} | Out-Null
 
 <# ntop #>
 if (Get-Command ntop -ErrorAction SilentlyContinue) {
@@ -91,18 +98,18 @@ function pst { Get-Clipboard }
 #endregion
 
 #region Editor Config
-$editorCommands = @{
-    nvim          = 'nvim'
-    vim           = 'vim'
-    vi            = 'vi'
-    code          = 'code'
-    'notepad++'   = 'notepad++'
+if (-not $env:EDITOR) {
+    $editorPriority = 'nvim', 'vim', 'vi', 'code', 'notepad++'
+    $foundEditor = ($editorPriority | ForEach-Object { 
+        Get-Command $_ -ErrorAction SilentlyContinue 
+    } | Select-Object -First 1).Name
+    
+    # Set the environment variable for future sessions
+    $env:EDITOR = if ($foundEditor) { $foundEditor } else { 'notepad' }
 }
-$EDITOR = $editorCommands.Keys | Where-Object { Test-CommandExists $_ } | Select-Object -First 1
-if (-not $EDITOR) { $EDITOR = 'notepad' }
-Set-Alias -Name edit -Value $EDITOR            
-Set-Alias -Name vim -Value $EDITOR
-Set-Alias -Name vi -Value $EDITOR
+Set-Alias -Name edit -Value $env:EDITOR
+Set-Alias -Name vim -Value $env:EDITOR
+Set-Alias -Name vi -Value $env:EDITOR
 
 if (-not (Test-CommandExists code-insiders)) {
     Set-Alias -Name code-insiders -Value code
@@ -123,13 +130,11 @@ function Sync-Profile {
     $loadTime = ($endTime - $startTime).TotalMilliseconds
     Write-Host "Profile reloaded in $([math]::Round($loadTime))ms." -ForegroundColor Green
 }
+Set-Alias -Name Refresh-Profile -Value Sync-Profile
+Set-Alias -Name refresh -Value Sync-Profile
 Set-Alias -Name Reload-Profile -Value Sync-Profile
 Set-Alias -Name reload -Value Sync-Profile
 Set-Alias -Name reset -Value Sync-Profile
-
-function vi { nvim @args }
-
-function vim { nvim @args }
 #endregion
 
 #region Filesystem Utilities
@@ -276,8 +281,8 @@ function unzip ($file) {
     }
 
     Write-Output("Extracting", $file, "to", $pwd)
-    $fullFile = Get-ChildItem -Path $pwd -Filter $file | ForEach-Object { $_.FullName }
-    Expand-Archive -Path $fullFile -DestinationPath $pwd
+    $fullFile = (Resolve-Path -LiteralPath $file).Path
+    Expand-Archive -LiteralPath $fullFile -DestinationPath $pwd
 }
 #endregion
 
@@ -286,19 +291,29 @@ function gs { git status }
 
 function ga { git add . }
 
-function gc { param($m) git commit -m "$m" }
-
 function gp { git push }
 
 function g { z Github }
 
 function gcom {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromRemainingArguments)]
+        [string[]]$Message
+    )
     git add .
-    git commit -m "$args"
+    git commit -m "$Message"
 }
+Set-Alias -Name gc -Value gcom
+
 function lazyg {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromRemainingArguments)]
+        [string[]]$Message
+    )
     git add .
-    git commit -m "$args"
+    git commit -m "$Message"
     git push
 }
 #endregion
@@ -442,12 +457,9 @@ function Stop-ProcessByName {
         }
     }
 }
+Set-Alias -Name pkill -Value Stop-ProcessByName
 Set-Alias -Name kill -Value Stop-ProcessByName
 Set-Alias -Name stop -Value Stop-ProcessByName
-
-function pkill($name) {
-    Get-Process $name -ErrorAction SilentlyContinue | Stop-Process
-}
 
 function pgrep($name) {
     Get-Process $name
@@ -475,14 +487,15 @@ function Get-WindowsInstallInfo {
     param()
 
     $RegistryPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-    
-    $InstallDateValue = Get-ItemProperty -Path $RegistryPath -Name "InstallDate"
-    $InstallDate = [System.DateTime]::UnixEpoch.AddSeconds($InstallDateValue.InstallDate)
+    $regProps = Get-ItemProperty -Path $RegistryPath
+
+    $InstallDateValue = $regProps.InstallDate
+    $InstallDate = [System.DateTime]::UnixEpoch.AddSeconds($InstallDateValue)
     $OperationalTime = (Get-Date) - $InstallDate
 
-    $WindowsVersion = (Get-ItemProperty -Path $RegistryPath -Name "ProductName").ProductName
-    $BuildNumber = (Get-ItemProperty -Path $RegistryPath -Name "CurrentBuildNumber").CurrentBuildNumber
-    $UBR = (Get-ItemProperty -Path $RegistryPath -Name "UBR").UBR
+    $WindowsVersion = $regProps.ProductName
+    $BuildNumber = $regProps.CurrentBuildNumber
+    $UBR = $regProps.UBR
     $FullBuildNumber = "$BuildNumber.$UBR"
 
     $Uptime = (Get-Date) - (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
@@ -627,24 +640,11 @@ if (Test-Path $CustomProfilePath) {
     }
 }
 
-if (-not (Test-CommandExists fastfetch)) {
-    Write-Host "WARNING: fastfetch is not installed. Please install it to use fastfetch commands." -ForegroundColor Yellow
-} else {
-    try {
-        & fastfetch
-    } catch {
-        Write-Host "fastfetch failed: $_" -ForegroundColor Yellow
-    }
-}
-
 if (-not (Test-CommandExists zoxide)) {
     Write-Host "WARNING: zoxide is not installed. Please install it to use zoxide commands." -ForegroundColor Yellow
 } else {
     Invoke-Expression (& { (zoxide init powershell | Out-String) })
 }
 
-if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction SilentlyContinue)) {
-    Write-Host "Experimental feature PSFeedbackProvider is not enabled. Enabling it now." -ForegroundColor Yellow
-    Enable-ExperimentalFeature PSFeedbackProvider
-}
+
 #endregion
