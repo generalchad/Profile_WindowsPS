@@ -1,4 +1,4 @@
-#region Setup and Imports
+#region Core Setup
 <# PSFeedbackProvider #>
 # This fixes issues with feedback prompts in PowerShell 7.3+
 if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction SilentlyContinue)) {
@@ -6,42 +6,31 @@ if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction Silently
     Enable-ExperimentalFeature PSFeedbackProvider
 }
 
-<# Terminal Icons #>
-Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action {
-    Import-Module Terminal-Icons
-    Unregister-Event -SourceIdentifier PowerShell.OnIdle
-} | Out-Null
-
 <# ntop #>
 if (Get-Command ntop -ErrorAction SilentlyContinue) {
     Set-Alias -Name top -Value ntop
 }
-
-#region Aliases
-Set-Alias -Name cheat -Value Get-CheatSh
-Set-Alias -Name tldr -Value Get-CheatSh
-
-#region Colors & Theming
-$PSReadLineOptions = @{
-    Colors = @{
-        Command            = "#fabd2f"
-        Parameter          = "#98971a"
-        String             = "#83a598"
-        Variable           = "#d65d0e"
-    }
-    PredictionSource      = "History"
-    PredictionViewStyle   = "InlineView"
-    HistoryNoDuplicates   = $true
-    MaximumHistoryCount   = 10000
-}
-Set-PSReadLineOption @PSReadLineOptions
 #endregion
 
-#region Console Configuration
+#region PSReadLine & Theming
+$PSReadLineOptions = @{
+    Colors = @{
+        Command   = "#fabd2f"
+        Parameter = "#98971a"
+        String    = "#83a598"
+        Variable  = "#d65d0e"
+    }
+    PredictionSource    = "History"
+    PredictionViewStyle = "InlineView"
+    HistoryNoDuplicates = $true
+    MaximumHistoryCount = 10000
+}
+Set-PSReadLineOption @PSReadLineOptions
+
 <# Command History Configuration #>
 Set-PSReadLineOption -AddToHistoryHandler {
     param($Line)
-    $sensitive = @( "password", "secret", "key", "apikey", "token", "connectionstring" )
+    $sensitive = @("password", "secret", "key", "apikey", "token", "connectionstring")
     $hasSensitive = $sensitive | Where-Object { $Line -like "*$_*" }
     if ($hasSensitive) {
         return
@@ -50,9 +39,9 @@ Set-PSReadLineOption -AddToHistoryHandler {
 
 <# Custom Autocompletes #>
 $completionCommands = @{
-    docker = @('run','build','push','pull')
-    git    = @('add','commit','push','pull')
-    npm    = @('install','run','test')
+    docker = @('run', 'build', 'push', 'pull')
+    git    = @('add', 'commit', 'push', 'pull')
+    npm    = @('install', 'run', 'test')
 }
 
 Register-ArgumentCompleter -CommandName $completionCommands.Keys -ScriptBlock {
@@ -62,12 +51,27 @@ Register-ArgumentCompleter -CommandName $completionCommands.Keys -ScriptBlock {
 #endregion
 
 #region Core Utilities
+<#
+    .SYNOPSIS
+    Checks if a command exists in the current PowerShell session.
+
+    .PARAMETER Command
+    The name of the command to check for.
+#>
 function Test-CommandExists {
-    param($command)
-    $exists = $null -ne (Get-Command $command -ErrorAction SilentlyContinue)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command
+    )
+    $exists = $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
     return $exists
 }
 
+<#
+    .SYNOPSIS
+    Checks if the user is connected to GitHub.
+#>
 function Test-GithubConnection {
     [CmdletBinding()]
     param()
@@ -77,9 +81,11 @@ function Test-GithubConnection {
         $null = Invoke-RestMethod -Uri "https://github.com" -ConnectionTimeoutSeconds 1
         Write-Debug "Test-GithubConnection: Connected to GitHub successfully."
         $Connected = $true
-    } catch [System.Net.WebException] {
+    }
+    catch [System.Net.WebException] {
         Write-Debug "Test-GithubConnection: Network error: $($_.Exception.Message)"
-    } catch {
+    }
+    catch {
         Write-Debug "Test-GithubConnection: An unexpected error occurred: $($_.Exception.Message)"
     }
     return $Connected
@@ -87,14 +93,19 @@ function Test-GithubConnection {
 #endregion
 
 #region Clipboard Utilities
+<#
+    .SYNOPSIS
+    Clears the Windows clipboard.
+#>
 function Clear-Clipboard {
     [CmdletBinding()]
     param()
 
     Set-Clipboard -Value $null
 }
-Set-Alias -Name clearclipboard  -Value Clear-Clipboard
-Set-Alias -Name clrclip -Value Clear-Clipboard
+("clearclipboard", "clearclip", "clrclip") | ForEach-Object {
+    Set-Alias -Name $_ -Value Clear-Clipboard
+}
 
 function cpy { Set-Clipboard $args[0] }
 
@@ -103,29 +114,39 @@ function pst { Get-Clipboard }
 
 #region Editor Config
 if (-not $env:EDITOR) {
+    # For better performance, consider setting this as a persistent user environment variable once.
     $editorPriority = 'nvim', 'vim', 'vi', 'code', 'notepad++'
-    $foundEditor = ($editorPriority | ForEach-Object { 
-        Get-Command $_ -ErrorAction SilentlyContinue 
+    $foundEditor = ($editorPriority | ForEach-Object {
+        Get-Command $_ -ErrorAction SilentlyContinue
     } | Select-Object -First 1).Name
-    
+
     # Set the environment variable for future sessions
     $env:EDITOR = if ($foundEditor) { $foundEditor } else { 'notepad' }
 }
-Set-Alias -Name edit -Value $env:EDITOR
-Set-Alias -Name vim -Value $env:EDITOR
-Set-Alias -Name vi -Value $env:EDITOR
+("edit", "vim", "vi") | ForEach-Object { 
+    Set-Alias -Name $_ -Value $env:EDITOR
+}
 
 if (-not (Test-CommandExists code-insiders)) {
     Set-Alias -Name code-insiders -Value code
-} else {
+}
+else {
     Set-Alias -Name code -Value code-insiders
 }
 
+<#
+    .SYNOPSIS
+    Opens the PowerShell profile in the user's preferred editor.
+#>
 function Edit-Profile {
-    vim $PROFILE
+    & $EDITOR $PROFILE
 }
 Set-Alias -Name ep -Value Edit-Profile
 
+<#
+    .SYNOPSIS
+    Reloads the PowerShell profile.
+#>
 function Sync-Profile {
     Write-Debug "Reloading PowerShell profile..."
     $startTime = Get-Date
@@ -134,33 +155,32 @@ function Sync-Profile {
     $loadTime = ($endTime - $startTime).TotalMilliseconds
     Write-Host "Profile reloaded in $([math]::Round($loadTime))ms." -ForegroundColor Green
 }
-Set-Alias -Name Refresh-Profile -Value Sync-Profile
-Set-Alias -Name refresh -Value Sync-Profile
-Set-Alias -Name Reload-Profile -Value Sync-Profile
-Set-Alias -Name reload -Value Sync-Profile
-Set-Alias -Name reset -Value Sync-Profile
+("Refresh-Profile", "refresh", "Reload-Profile", "reload", "reset") | ForEach-Object {
+    Set-Alias -Name $_ -Value Sync-Profile
+}
 #endregion
 
 #region Filesystem Utilities
 function Find-File {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$Name
     )
 
     Write-Debug "Find-File: Searching for files matching '$Name'"
 
-    Get-ChildItem -Recurse -Filter "*$Name*" -ErrorAction SilentlyContinue | 
+    Get-ChildItem -Recurse -Filter "*$Name*" -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty FullName
 }
-Set-Alias -Name ff -Value Find-File
-Set-Alias -Name find -Value Find-File
+("ff", "find") | ForEach-Object {
+    Set-Alias -Name $_ -Value Find-File
+}
 
 function Find-Text {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory, Position=0, ValueFromPipeline)]
+        [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
         [ValidateNotNullOrEmpty()]
         [string]$Regex,
 
@@ -172,7 +192,8 @@ function Find-Text {
 
     if ($Path.Count -eq 0) {
         $input | Select-String $Regex
-    } else {
+    }
+    else {
         Get-ChildItem $Path | Select-String $Regex
     }
 }
@@ -181,84 +202,72 @@ Set-Alias -Name grep -Value Find-Text
 function New-File {
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [Parameter(Position=0, ValueFromPipeline)]
+        [Parameter(Position = 0, ValueFromPipeline)]
         [string]$Path = ".\New file",
 
-        [Parameter(Position=1)]
+        [Parameter(Position = 1)]
         [switch]$Hidden,
 
-        [Parameter(Position=2)]
+        [Parameter(Position = 2)]
         [switch]$System
     )
 
     process {
         try {
             Write-Debug "New-File: Creating new file at $Path"
-            Write-Debug "Hidden? $Hidden"
-            Write-Debug "System? $System"
-            
             $NewItem = New-Item -Path $Path -ItemType File -Force
-
             if ($Hidden) { $NewItem.Attributes += "Hidden" }
             if ($System) { $NewItem.Attributes += "System" }
-
             Write-Debug "New-File: Created new file at $Path"
-        } catch [System.UnauthorizedAccessException] {
+        }
+        catch [System.UnauthorizedAccessException] {
             Write-Error "New File: You do not have the correct permissions: $_"
-        } catch {
+        }
+        catch {
             Write-Error "New File: An unexpected error occurred: $_"
         }
     }
-
 }
-Set-Alias -Name touch -Value New-File
-Set-Alias -Name nf -Value New-File
+("newfile", "nf", "touch") | ForEach-Object {
+    Set-Alias -Name $_ -Value New-File
+}
 
 function New-Folder {
     [CmdletBinding()]
     param(
-        [Parameter(Position=0, ValueFromPipeline)]
+        [Parameter(Position = 0, ValueFromPipeline)]
         [string]$Path = ".\New folder",
-
-        [Parameter(Position=1)]
+        [Parameter(Position = 1)]
         [switch]$Hidden,
-
-        [Parameter(Position=2)]
+        [Parameter(Position = 2)]
         [switch]$System
     )
-    
+
     process {
-    try {
-        Write-Debug "New-Folder: Creating new folder at $Path"
-        Write-Debug "Hidden? $Hidden"
-        Write-Debug "System? $System"
+        try {
+            Write-Debug "New-Folder: Creating new folder at $Path"
+            $NewFolder = New-Item -Path $Path -ItemType Directory -Force
+            if ($Hidden) { $NewFolder.Attributes += "Hidden" }
+            if ($System) { $NewFolder.Attributes += "System" }
+            Write-Debug "New-Folder: Created new folder at $Path"
+        }
+        catch [System.UnauthorizedAccessException] {
+            Write-Error "New-Folder: You do not have the correct permissions: $_" -ErrorAction Continue
+            return
+        }
+        catch {
+            Write-Error "New-Folder: An unexpected error occurred: $_" -ErrorAction Continue
+            return
+        }
 
-        $NewFolder = New-Item -Path $Path -ItemType Directory -Force
-
-        if ($Hidden) { $NewFolder.Attributes += "Hidden" }
-        if ($System) { $NewFolder.Attributes += "System" }
-
-        Write-Debug "New-Folder: Created new folder at $Path"
-    } catch [System.UnauthorizedAccessException] {
-        Write-Error "New-Folder: You do not have the correct permissions: $_" -ErrorAction Continue
-        return
-    } catch {
-        Write-Error "New-Folder: An unexpected error occurred: $_" -ErrorAction Continue
-        return
-    }
-
-    <# !!! Warning: Nonstandard nonsense !!! #>
-
-    # If the function is invoked as `mkcd`, change the location to the new folder after creation
-    if ($MyInvocation.InvocationName -eq "mkcd") {
-        Set-Location $Path
-    }
-
-    <# !!! /Warning: Nonstandard nonsense !!! #>
+        if ($MyInvocation.InvocationName -eq "mkcd") {
+            Set-Location $Path
+        }
     }
 }
-Set-Alias -Name mkcd -Value New-Folder
-Set-Alias -Name mkdir -Value New-Folder
+("mkcd", "mkdir") | ForEach-Object { 
+    Set-Alias -Name $_ -Value New-Folder 
+}
 
 function head {
     param($Path, $n = 10)
@@ -274,29 +283,150 @@ function df {
     get-volume
 }
 
-function sed($file, $find, $replace) {
-    (Get-Content $file).replace("$find", $replace) | Set-Content $file
-}
+<#
+    .SYNOPSIS
+    Quickly extracts archive files to a specified destination, or the current directory if none is specified.
 
-function unzip ($file) {
-    if (-not (Test-Path $file)) {
-        Write-Error "unzip: File not found: $file" -ErrorAction Continue
-        return 
+    .DESCRIPTION
+    The Extract-Archive function extracts the contents of an archive file (e.g., .zip) to a specified destination directory.
+    If the destination directory does not exist, it will be created. 
+    If no destination is specified, the current directory will be used.
+
+    .PARAMETER Path
+    The path to the archive file to extract.
+
+    .PARAMETER DestinationPath
+    The path to extract the archive file to. If not specified, the current directory will be used.
+
+    .PARAMETER Force
+    If specified, the archive file will be overwritten if it already exists in the destination directory.
+
+    .EXAMPLE
+    Extract-Archive -Path "C:\path\to\archive.zip"
+    Extracts the contents of "archive.zip" to the current directory.
+
+    .EXAMPLE
+    unzip .\archive.zip
+    Extracts the contents of "archive.zip" to the current directory.
+#>
+function Extract-Archive {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$Path,
+
+        [Parameter(Position=1)]
+        [string]$DestinationPath = $pwd,
+
+        [switch]$Force
+    )
+
+    $resolvedPath = Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue
+    if (-not $resolvedPath) {
+        Write-Error "unzip: File not found at '$Path'"
+        return
     }
 
-    Write-Output("Extracting", $file, "to", $pwd)
-    $fullFile = (Resolve-Path -LiteralPath $file).Path
-    Expand-Archive -LiteralPath $fullFile -DestinationPath $pwd
+    if (-not (Test-Path $DestinationPath)) {
+        Write-Verbose "Destination '$DestinationPath' not found. Creating it."
+        New-Item -Path $DestinationPath -ItemType Directory | Out-Null
+    }
+
+    Write-Host "Extracting '$($resolvedPath.ProviderPath)' to '$DestinationPath'..."
+    Expand-Archive -LiteralPath $resolvedPath.ProviderPath -DestinationPath $DestinationPath -Force:$Force
 }
+("extract", "unzip") | ForEach-Object {
+    Set-Alias -Name $_ -Value Extract-Archive
+}
+
+<#
+    .SYNOPSIS
+    Replaces text in files or input strings using regex patterns.
+
+    .DESCRIPTION
+    The Replace-Text function allows you to replace text in files or input strings using regular expressions.
+
+    .PARAMETER Pattern
+    The regex pattern to match and replace.
+
+    .PARAMETER Replacement
+    The text to replace the matched pattern with.
+
+    .PARAMETER Path
+    The path to the file(s) to replace text in.
+
+    .PARAMETER InputObject
+    The input string to replace text in.
+
+    .PARAMETER InPlace
+    If specified, the file(s) will be modified in-place.
+
+    .EXAMPLE
+    Replace-Text -Pattern "Hello" -Replacement "World" -Path .\file.txt
+    Replaces all occurrences of "Hello" with "World" in file.txt.
+
+    .EXAMPLE
+    Replace-Text -Pattern "Hello" -Replacement "World" -InputObject "Hello World"
+    Replaces "Hello" with "World" in the input string "Hello World".
+#>
+function Replace-Text {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Pattern,
+
+        [Parameter(Mandatory, Position = 1)]
+        [string]$Replacement,
+
+        [Parameter(Position = 2, ValueFromPipelineByPropertyName)]
+        [string[]]$Path,
+
+        [Parameter(ValueFromPipeline)]
+        [string]$InputObject,
+
+        [Parameter()]
+        [switch]$InPlace
+    )
+
+    begin {
+        Write-Debug "Replace-Text: Pattern='$Pattern', Replacement='$Replacement', InPlace=$InPlace, Path=$Path"
+    }
+
+    process {
+        if ($PSBoundParameters.ContainsKey('Path')) {
+            foreach ($file in $Path) {
+                $resolvedPath = Resolve-Path -LiteralPath $file
+                if ($InPlace) {
+                    if ($PSCmdlet.ShouldProcess($resolvedPath, "Replace text ('$Pattern' -> '$Replacement')")) {
+                        $tempFile = [System.IO.Path]::GetTempFileName()
+                        $reader = [System.IO.File]::OpenText($resolvedPath)
+                        $writer = [System.IO.File]::CreateText($tempFile)
+                        while ($null -ne ($line = $reader.ReadLine())) {
+                            $writer.WriteLine($line -replace $Pattern, $Replacement)
+                        }
+                        $reader.Close()
+                        $writer.Close()
+                        Move-Item -Path $tempFile -Destination $resolvedPath -Force
+                    }
+                }
+                else {
+                    Get-Content -Path $resolvedPath | ForEach-Object { $_ -replace $Pattern, $Replacement }
+                }
+            }
+        }
+        else {
+            $InputObject -replace $Pattern, $Replacement
+        }
+    }
+}
+Set-Alias -Name sed -Value Replace-Text
 #endregion
 
 #region Git Operations
 function gs { git status }
-
 function ga { git add . }
-
 function gp { git push }
-
 function g { z Github }
 
 function gcom {
@@ -308,7 +438,6 @@ function gcom {
     git add .
     git commit -m "$Message"
 }
-Set-Alias -Name gc -Value gcom
 
 function lazyg {
     [CmdletBinding()]
@@ -326,13 +455,14 @@ function lazyg {
 function Invoke-PeriodicTable {
     if (Test-CommandExists "periodic-table-cli") {
         periodic-table-cli
-    } else {
+    }
+    else {
         Write-Error "periodic-table-cli is not installed."
     }
 }
-Set-Alias -Name pt -Value Invoke-PeriodicTable
-Set-Alias -Name ptable -Value Invoke-PeriodicTable
-Set-Alias -Name ptoe -Value Invoke-PeriodicTable
+("pt", "ptable", "ptoe") | ForEach-Object {
+    Set-Alias -Name $_ -Value Invoke-PeriodicTable
+}
 #endregion
 
 #region Navigation Shortcuts
@@ -341,20 +471,18 @@ function Invoke-Explorer {
     param(
         [string]$Path = "."
     )
-
     Start-Process -FilePath explorer.exe -ArgumentList $Path
 }
-Set-Alias -Name explore -Value Invoke-Explorer
-Set-Alias -Name explorer -Value Invoke-Explorer
+("explore", "explorer", "open", "openfolder") | ForEach-Object {
+    Set-Alias -Name $_ -Value Invoke-Explorer
+}
 
 function docs { Set-Location -Path $HOME\Documents }
-
 function dtop { Set-Location -Path $HOME\Desktop }
-
 function dl { Set-Location -Path $HOME\Downloads }
+Set-Alias -Name downloads -Value dl
 
 function la { Get-ChildItem -Path . -Force | Format-Table -AutoSize }
-
 function ll { Get-ChildItem -Path . -Force -Hidden | Format-Table -AutoSize }
 #endregion
 
@@ -362,12 +490,14 @@ function ll { Get-ChildItem -Path . -Force -Hidden | Format-Table -AutoSize }
 function Test-NetSpeed {
     if (Test-CommandExists librespeed-cli) {
         librespeed-cli $args[0]
-    } else {
+    }
+    else {
         Write-Error "Test-NetSpeed: librespeed-cli is not installed."
     }
 }
-Set-Alias -Name speed -Value Test-NetSpeed
-Set-Alias -Name speedtest -Value Test-NetSpeed
+("speed", "speedtest", "testspeed") | ForEach-Object {
+    Set-Alias -Name $_ -Value Test-NetSpeed
+}
 
 function flushdns { Clear-DnsClientCache }
 
@@ -390,7 +520,8 @@ function Get-LatestPowerShellVersion {
         $LatestVersionString = $LatestReleaseInfo.tag_name.TrimStart('v')
         $LatestVersion = [Version]$LatestVersionString
         return $LatestVersion
-    } catch {
+    }
+    catch {
         Write-Debug Get-LatestPowerShellVersion
         return $null
     }
@@ -410,7 +541,8 @@ function Update-PowerShell {
         Write-Host "PowerShell is up to date." -ForegroundColor Green
         Write-Debug "Current version: $CurrentVersion"
         return
-    } else {
+    }
+    else {
         Write-Host "PowerShell is out of date. Current version: $CurrentVersion. Latest version: $LatestVersion" -ForegroundColor Yellow
         $ConfirmUpdate = Read-Host "Do you want to update PowerShell? (Y/N)"
         if ($ConfirmUpdate.ToLower() -eq "y") {
@@ -437,18 +569,17 @@ function Stop-ProcessByName {
     foreach ($item in $NameOrPid) {
         if ($item -match '^\d+$') {
             $processes = Get-Process -Id $item -ErrorAction SilentlyContinue
-        } else {
+        }
+        else {
             $processes = Get-Process -Name $item -ErrorAction SilentlyContinue
         }
 
         if ($processes) {
-            if ($PSCmdlet.ShouldProcess("Processes matching '$item'","Stop")) {
+            if ($PSCmdlet.ShouldProcess("Processes matching '$item'", "Stop")) {
                 $processInfo = $processes | Select-Object ProcessName, Id, Path
                 $processes | Stop-Process
-
                 Write-Host "Stopped all processes matching '$item'" -ForegroundColor Green
                 Write-Host "Details of stopped processes:" -ForegroundColor Cyan
-                
                 $processInfo | ForEach-Object {
                     Write-Host ("Process: {0} (PID: {1})" -f $_.ProcessName, $_.Id) -ForegroundColor Yellow
                     if ($_.Path) {
@@ -456,14 +587,15 @@ function Stop-ProcessByName {
                     }
                 }
             }
-        } else {
+        }
+        else {
             Write-Warning "No processes matching '$item' found."
         }
     }
 }
-Set-Alias -Name pkill -Value Stop-ProcessByName
-Set-Alias -Name kill -Value Stop-ProcessByName
-Set-Alias -Name stop -Value Stop-ProcessByName
+("pkill", "kill", "stop") | ForEach-Object {
+    Set-Alias -Name $_ -Value Stop-ProcessByName
+}
 
 function pgrep($name) {
     Get-Process $name
@@ -474,7 +606,7 @@ function pgrep($name) {
 function Get-Uptime {
     [CmdletBinding()]
     param()
-    
+
     $OS = Get-CimInstance Win32_OperatingSystem
     $LastBootUpTime = $OS.LastBootUpTime
     $Uptime = (Get-Date) - $LastBootUpTime
@@ -483,8 +615,9 @@ function Get-Uptime {
     Write-Output ("System Uptime: {0} days, {1} hours, {2} minutes" -f `
         [int]$Uptime.TotalDays, $Uptime.Hours, $Uptime.Minutes)
 }
-Set-Alias -Name up -Value Get-Uptime
-Set-Alias -Name uptime -Value Get-Uptime
+("up", "uptime", "get-uptime") | ForEach-Object {
+    Set-Alias -Name $_ -Value Get-Uptime
+}
 
 function Get-WindowsInstallInfo {
     [CmdletBinding()]
@@ -492,49 +625,38 @@ function Get-WindowsInstallInfo {
 
     $RegistryPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
     $regProps = Get-ItemProperty -Path $RegistryPath
-
     $InstallDateValue = $regProps.InstallDate
     $InstallDate = [System.DateTime]::UnixEpoch.AddSeconds($InstallDateValue)
     $OperationalTime = (Get-Date) - $InstallDate
-
     $WindowsVersion = $regProps.ProductName
     $BuildNumber = $regProps.CurrentBuildNumber
     $UBR = $regProps.UBR
     $FullBuildNumber = "$BuildNumber.$UBR"
-
     $Uptime = (Get-Date) - (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
-
     $Drives = Get-PSDrive -PSProvider FileSystem
     $RAM = Get-CimInstance -ClassName Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum
     $CPU = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
 
     Write-Output ("Windows Version: {0} (Build {1})" -f $WindowsVersion, $FullBuildNumber)
     Write-Output ("Install Date: {0}" -f $InstallDate)
-    Write-Output ("Operational Time: {0:N0} days, {1} hours, {2} minutes" -f 
-        $OperationalTime.TotalDays, $OperationalTime.Hours, $OperationalTime.Minutes)
-    Write-Output ("System Uptime: {0:N0} days, {1} hours, {2} minutes" -f 
-        $Uptime.TotalDays, $Uptime.Hours, $Uptime.Minutes)
-    
+    Write-Output ("Operational Time: {0:N0} days, {1} hours, {2} minutes" -f $OperationalTime.TotalDays, $OperationalTime.Hours, $OperationalTime.Minutes)
+    Write-Output ("System Uptime: {0:N0} days, {1} hours, {2} minutes" -f $Uptime.TotalDays, $Uptime.Hours, $Uptime.Minutes)
     Write-Output "`nDrive Space:"
-    foreach ($Drive in ($Drives | Where-Object { 
-        $_.Name -match '^[A-Z]$' -and               # Single letter drive name
-        $_.Provider.Name -eq 'FileSystem' -and      # Must be a filesystem drive
-        $_.Root -notlike "\\*" -and                 # Must not be a network drive
-        $null -ne $_.Used                           # Must have used space value
+    foreach ($Drive in ($Drives | Where-Object {
+        $_.Name -match '^[A-Z]$' -and $_.Provider.Name -eq 'FileSystem' -and $_.Root -notlike "\\*" -and $null -ne $_.Used
     })) {
         if ($Drive.Free -and ($Drive.Used -or $Drive.Free)) {
             $FreeSpace = [math]::Round($Drive.Free / 1GB, 2)
             $TotalSpace = [math]::Round(($Drive.Used + $Drive.Free) / 1GB, 2)
-            Write-Output ("Drive {0}: {1:N2} GB free of {2:N2} GB" -f 
-                $Drive.Name, $FreeSpace, $TotalSpace)
+            Write-Output ("Drive {0}: {1:N2} GB free of {2:N2} GB" -f $Drive.Name, $FreeSpace, $TotalSpace)
         }
     }
-    
     Write-Output ("`nTotal RAM: {0:N2} GB" -f ($RAM.Sum / 1GB))
     Write-Output ("CPU: {0} ({1} cores)" -f $CPU.Name, $CPU.NumberOfCores)
 }
-Set-Alias -Name instime -Value Get-WindowsInstallInfo
-Set-Alias -Name installtime -Value Get-WindowsInstallInfo
+("instime", "installtime") | ForEach-Object {
+    Set-Alias -Name $_ -Value Get-WindowsInstallInfo
+}
 
 function sysinfo { Get-ComputerInfo }
 #endregion
@@ -546,12 +668,10 @@ function New-Hastebin {
         [Parameter(Mandatory, ValueFromPipeline)]
         [string]$FilePath
     )
-    
     if (-not (Test-Path $FilePath)) {
         Write-Error "File path does not exist." -ErrorAction Continue
         return
     }
-    
     $Content = Get-Content $FilePath -Raw
     $uri = "http://bin.christitus.com/documents"
     try {
@@ -559,9 +679,11 @@ function New-Hastebin {
         $hasteKey = $response.key
         $url = "http://bin.christitus.com/$hasteKey"
         Write-Output $url
-    } catch [System.Net.WebException] {
+    }
+    catch [System.Net.WebException] {
         Write-Error "New-Hastebin: Unexpected network error: $($_.Exception.Message)" -ErrorAction Continue
-    } catch {
+    }
+    catch {
         Write-Error "New-Hastebin: An unexpected error occurred: $($_.Exception.Message)" -ErrorAction Continue
     }
 }
@@ -575,10 +697,11 @@ function export($name, $value) {
     Set-Item -Force -Path "env:$name" -Value $value;
 }
 
-function py { 
+function py {
     try {
         python @args
-    } catch {
+    }
+    catch {
         Write-Error "Failed to run Python: $_" -ErrorAction Continue
     }
 }
@@ -586,69 +709,48 @@ function py {
 function quit { exit }
 #endregion
 
-#region Initialization
-$CustomProfilePath = Join-Path $PSScriptRoot "Profile.ps1" # Renamed for clarity
+#region Session Initialization
+<# Terminal Icons (Deferred) #>
+Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action {
+    Import-Module Terminal-Icons
+    Unregister-Event -SourceIdentifier PowerShell.OnIdle
+} | Out-Null
+
+<# Oh-My-Posh with Caching #>
+# Define theme path here
+$OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
+$OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
+
+# Regenerate the cache if it doesn't exist or the theme file is newer
+if ((Test-Path $OmpTheme) -and ((!(Test-Path $OmpCache)) -or ((Get-Item $OmpTheme).LastWriteTime -gt (Get-Item $OmpCache).LastWriteTime))) {
+    Write-Host "Generating Oh-My-Posh cache..." -ForegroundColor Yellow
+    oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8
+}
+
+if (Test-Path $OmpCache) {
+    . $OmpCache # Source the cache file
+} else {
+    Write-Warning "Oh-My-Posh theme not found at $OmpTheme. Prompt will not be customized."
+}
+
+<# Zoxide with Caching #>
+if (Test-CommandExists zoxide) {
+    $ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
+
+    # Regenerate the cache only if it doesn't exist (it rarely changes)
+    if (-not (Test-Path $ZoxideCache)) {
+        Write-Host "Generating Zoxide cache..." -ForegroundColor Yellow
+        zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8
+    }
+    . $ZoxideCache # Source the cache file
+} else {
+    Write-Warning "zoxide is not installed. Navigation shortcuts like 'z' will not work."
+}
+
+<# Custom Profile Loading (if it exists) #>
+$CustomProfilePath = Join-Path $PSScriptRoot "Profile.ps1"
 if (Test-Path $CustomProfilePath) {
     Write-Debug "Loading custom profile from $CustomProfilePath"
-    . $CustomProfilePath # Source the other profile script if it exists
-
-    # Determine OMP theme file extension (.omp.json or .omp.yaml)
-    # Ensure $OMP_THEME is defined, possibly in Profile.ps1 or default here
-    if (-not $OMP_THEME) { $OMP_THEME = "gruvbox" } # Example default
-    $themeBase = Join-Path $HOME "Documents\PowerShell\Themes\$($OMP_THEME).omp" # Safer path join
-    
-    if (Test-Path "$themeBase.json") {
-        $themePath = "$themeBase.json"
-    } elseif (Test-Path "$themeBase.yaml") {
-        $themePath = "$themeBase.yaml"
-    } else {
-        # Fallback or error if theme file not found
-        Write-Warning "Oh-My-Posh theme for '$OMP_THEME' not found. Using default or expecting error."
-        $themePath = "$themeBase.json" # Will likely fail if $OMP_THEME was not found
-    }
-
-    if (Test-CommandExists oh-my-posh) { # oh-my-posh command/function/alias exists
-        try {
-            oh-my-posh init pwsh --config "$themePath" | Out-String | Invoke-Expression
-        } catch {
-            Write-Host "Oh-My-Posh (command) failed to initialize: $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-    } elseif (Test-CommandExists oh-my-posh.exe) { # Fallback to oh-my-posh.exe if the command isn't found
-        try {
-            oh-my-posh.exe init pwsh --config "$themePath" | Out-String | Invoke-Expression
-        } catch {
-            Write-Host "Oh-My-Posh (exe) failed to initialize: $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-    } else {
-        Write-Host "Oh-My-Posh is not installed. Please install it to use custom themes." -ForegroundColor Yellow
-    }
-} else {
-    Write-Debug "No custom profile found at $CustomProfilePath"
-    # Fallback Oh-My-Posh initialization if the custom Profile.ps1 is not found
-    $defaultThemePath = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
-    if (Test-CommandExists oh-my-posh) {
-        try {
-            oh-my-posh init pwsh --config "$defaultThemePath" | Out-String | Invoke-Expression
-        } catch {
-            Write-Host "Oh-My-Posh (command) failed to initialize with default theme: $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-    } elseif (Test-CommandExists oh-my-posh.exe) {
-        try {
-            oh-my-posh.exe init pwsh --config "$defaultThemePath" | Out-String | Invoke-Expression
-        } catch {
-            Write-Host "Oh-My-Posh (exe) failed to initialize with default theme: $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-    }
-    else {
-        Write-Host "Oh-My-Posh is not installed (fallback check). Please install it to use custom themes." -ForegroundColor Yellow
-    }
+    . $CustomProfilePath
 }
-
-if (-not (Test-CommandExists zoxide)) {
-    Write-Host "WARNING: zoxide is not installed. Please install it to use zoxide commands." -ForegroundColor Yellow
-} else {
-    Invoke-Expression (& { (zoxide init powershell | Out-String) })
-}
-
-
 #endregion
