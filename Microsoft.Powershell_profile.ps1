@@ -562,34 +562,47 @@ function Update-PowerShell {
 function Stop-ProcessByName {
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [Parameter(Mandatory, ValueFromRemainingArguments)]
+        [Parameter(Mandatory, ValueFromRemainingArguments, ValueFromPipeline)]
         [string[]]$NameOrPid
     )
 
-    foreach ($item in $NameOrPid) {
-        if ($item -match '^\d+$') {
-            $processes = Get-Process -Id $item -ErrorAction SilentlyContinue
-        }
-        else {
-            $processes = Get-Process -Name $item -ErrorAction SilentlyContinue
-        }
+    Begin {
+        Write-Debug "Stop-ProcessByName: NameOrPid=$NameOrPid"
+    }
 
-        if ($processes) {
-            if ($PSCmdlet.ShouldProcess("Processes matching '$item'", "Stop")) {
-                $processInfo = $processes | Select-Object ProcessName, Id, Path
-                $processes | Stop-Process
-                Write-Host "Stopped all processes matching '$item'" -ForegroundColor Green
-                Write-Host "Details of stopped processes:" -ForegroundColor Cyan
-                $processInfo | ForEach-Object {
-                    Write-Host ("Process: {0} (PID: {1})" -f $_.ProcessName, $_.Id) -ForegroundColor Yellow
-                    if ($_.Path) {
-                        Write-Host ("Path: {0}" -f $_.Path) -ForegroundColor Gray
+    Process {
+        foreach ($item in $NameOrPid) {
+            # 1. Get the processes based on name or PID
+            if ($item -match '^\d+$') {
+                $processes = Get-Process -Id $item -ErrorAction SilentlyContinue
+            }
+            else {
+                $processes = Get-Process -Name $item -ErrorAction SilentlyContinue
+            }
+
+            if ($processes) {
+                $processInfo = $processes | Select-Object ProcessName, Id, Path, StartTime # Added StartTime for safety
+
+                # 2. Use ShouldProcess for safety
+                if ($PSCmdlet.ShouldProcess("Processes matching '$item'", "Stop")) {
+                    Write-Host "Attempting to stop processes matching '$item'..." -ForegroundColor Cyan
+                    
+                    # 3. Output details BEFORE stopping (for better logging/piping)
+                    Write-Output $processInfo | Format-Table -AutoSize | Out-String | Write-Host
+
+                    try {
+                        # 4. Stop the processes
+                        $processes | Stop-Process -ErrorAction Stop
+                        Write-Host "SUCCESS: Processes matching '$item' were stopped." -ForegroundColor Green
+                    } 
+                    catch {
+                        Write-Host "FAILED to stop one or more processes matching '$item': $($_.Exception.Message)" -ForegroundColor Red
                     }
                 }
             }
-        }
-        else {
-            Write-Warning "No processes matching '$item' found."
+            else {
+                Write-Warning "No active processes matching '$item' found."
+            }
         }
     }
 }
