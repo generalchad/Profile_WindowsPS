@@ -3,7 +3,12 @@
 # This fixes issues with feedback prompts in PowerShell 7.3+
 if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction SilentlyContinue)) {
     Write-Host "Experimental feature PSFeedbackProvider is not enabled. Enabling it now." -ForegroundColor Yellow
-    Enable-ExperimentalFeature PSFeedbackProvider
+    try {
+        Enable-ExperimentalFeature PSFeedbackProvider
+    }
+    catch {
+        Write-Warning "Failed to enable PSFeedbackProvider: $_"
+    }
 }
 
 <# ntop #>
@@ -139,7 +144,7 @@ else {
     Opens the PowerShell profile in the user's preferred editor.
 #>
 function Edit-Profile {
-    & $EDITOR $PROFILE
+    & $env:EDITOR $PROFILE
 }
 Set-Alias -Name ep -Value Edit-Profile
 
