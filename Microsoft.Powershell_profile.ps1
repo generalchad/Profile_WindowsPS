@@ -128,7 +128,7 @@ if (-not $env:EDITOR) {
     # Set the environment variable for future sessions
     $env:EDITOR = if ($foundEditor) { $foundEditor } else { 'notepad' }
 }
-("edit", "vim", "vi") | ForEach-Object { 
+("vim", "vi") | ForEach-Object { 
     Set-Alias -Name $_ -Value $env:EDITOR
 }
 
