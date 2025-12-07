@@ -1,7 +1,12 @@
 *
 !.gitignore
 !Microsoft.PowerShell_profile.ps1
+
+!Config/
+!Functions/
 !Themes/
+!Utilities/
+
 !Themes/*.json
 !Config/*.ps1
 !Functions/*.ps1
