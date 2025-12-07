@@ -2,7 +2,7 @@ function Update-IPConfig {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory = $false)]
-        [switch]$Force # Skips the confirmation prompt
+        [switch]$Force
     )
 
     # 1. Safety Check for Remote Sessions
@@ -10,14 +10,16 @@ function Update-IPConfig {
         Write-Host "WARNING: This will drop network connections temporarily." -ForegroundColor Yellow
         Write-Host "If you are connected via RDP/SSH, you may lose access." -ForegroundColor Yellow
         
-        # Capitalized 'N' indicates it is the default action (Safe by default)
         $confirmation = Read-Host "Are you sure you want to proceed? (y/N)"
         
-        # Only explicitly typing 'y' or 'Y' will proceed. Enter (empty) will abort.
         if ($confirmation -notmatch "^[Yy]$") {
             Write-Host "Aborted." -ForegroundColor Red
             return
         }
+    }
+
+    if (-not $PSCmdlet.ShouldProcess("Local network configuration", "Reset")) {
+        return
     }
 
     Write-Host "--- Resetting Network Configuration ---" -ForegroundColor Yellow
@@ -35,7 +37,6 @@ function Update-IPConfig {
     # 3. Release IP
     Write-Host "2. Releasing current IP addresses... " -NoNewline -ForegroundColor Cyan
     try {
-        # Redirecting standard output to null to keep console clean
         $null = ipconfig /release 2>&1
         Write-Host "[OK]" -ForegroundColor Green
     }
@@ -54,9 +55,9 @@ function Update-IPConfig {
         Write-Host "   Note: If DHCP is down, this takes a while." -ForegroundColor DarkGray
     }
 
-    Write-Host "" # Spacer
+    Write-Host ""
 
-    # 5. Modern Output (Cleaner than ipconfig)
+    # 5. Show Current IPv4 Configuration
     Write-Host "--- Current IPv4 Configuration ---" -ForegroundColor Yellow
     
     $NetConfig = Get-NetIPAddress -AddressFamily IPv4 | 
