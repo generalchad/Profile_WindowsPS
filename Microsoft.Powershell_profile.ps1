@@ -677,12 +677,80 @@ function Test-NetSpeed {
 }
 
 function Update-IPConfig {
-    ipconfig /release
-    ipconfig /renew
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $false)]
+        [switch]$Force # Skips the confirmation prompt
+    )
+
+    # 1. Safety Check for Remote Sessions
+    if (-not $Force) {
+        Write-Host "WARNING: This will drop network connections temporarily." -ForegroundColor Yellow
+        Write-Host "If you are connected via RDP/SSH, you may lose access." -ForegroundColor Yellow
+        
+        # Capitalized 'N' indicates it is the default action (Safe by default)
+        $confirmation = Read-Host "Are you sure you want to proceed? (y/N)"
+        
+        # Only explicitly typing 'y' or 'Y' will proceed. Enter (empty) will abort.
+        if ($confirmation -notmatch "^[Yy]$") {
+            Write-Host "Aborted." -ForegroundColor Red
+            return
+        }
+    }
+
+    Write-Host "--- Resetting Network Configuration ---" -ForegroundColor Yellow
+
+    # 2. Flush DNS
+    Write-Host "1. Flushing DNS Cache... " -NoNewline -ForegroundColor Cyan
+    try {
+        $null = ipconfig /flushdns
+        Write-Host "[OK]" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[FAILED]" -ForegroundColor Red
+    }
+
+    # 3. Release IP
+    Write-Host "2. Releasing current IP addresses... " -NoNewline -ForegroundColor Cyan
+    try {
+        # Redirecting standard output to null to keep console clean
+        $null = ipconfig /release 2>&1
+        Write-Host "[OK]" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[Error]" -ForegroundColor Red
+    }
+
+    # 4. Renew IP
+    Write-Host "3. Renewing IP addresses (this may take a moment)... " -NoNewline -ForegroundColor Cyan
+    try {
+        $null = ipconfig /renew 2>&1
+        Write-Host "[OK]" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[Timeout/Error]" -ForegroundColor Red
+        Write-Host "   Note: If DHCP is down, this takes a while." -ForegroundColor DarkGray
+    }
+
+    Write-Host "" # Spacer
+
+    # 5. Modern Output (Cleaner than ipconfig)
+    Write-Host "--- Current IPv4 Configuration ---" -ForegroundColor Yellow
+    
+    $NetConfig = Get-NetIPAddress -AddressFamily IPv4 | 
+                Where-Object { $_.InterfaceAlias -notmatch "Loopback|vEthernet" } |
+                Select-Object InterfaceAlias, IPAddress, PrefixLength
+
+    if ($NetConfig) {
+        format-table -InputObject $NetConfig -AutoSize
+    }
+    else {
+        Write-Host "No active IPv4 addresses found." -ForegroundColor Red
+    }
 }
 ("resetip", "renewip", "updateip", "refreship") | ForEach-Object {
     Set-Alias -Name $_ -Value Update-IPConfig
-} 
+}
 
 function Get-PublicIP { (Invoke-WebRequest http://ifconfig.me/ip).Content }
 
