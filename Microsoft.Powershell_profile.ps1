@@ -144,7 +144,7 @@ else {
     Opens the PowerShell profile in the user's preferred editor.
 #>
 function Edit-Profile {
-    & $EDITOR $PROFILE
+    & $env:EDITOR $PROFILE
 }
 Set-Alias -Name ep -Value Edit-Profile
 
