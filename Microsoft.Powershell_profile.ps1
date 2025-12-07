@@ -144,7 +144,7 @@ else {
     Opens the PowerShell profile in the user's preferred editor.
 #>
 function Edit-Profile {
-    & $env:EDITOR $PROFILE
+    & $EDITOR $PROFILE
 }
 Set-Alias -Name ep -Value Edit-Profile
 
@@ -492,6 +492,49 @@ function ll { Get-ChildItem -Path . -Force -Hidden | Format-Table -AutoSize }
 #endregion
 
 #region Networking Utilities
+function Test-SmtpRelay {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$HOSTNAME,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateRange(1, 65535)]
+        [int[]]$PORT = @(25, 587, 465, 2525)
+    )
+
+    # switch case for hostname shortcuts
+    switch ($HOSTNAME.ToLower()) {
+        "gmail"       { $HOSTNAME = "smtp.gmail.com" }
+        "outlook"     { $HOSTNAME = "smtp.office365.com" }
+        "yahoo"       { $HOSTNAME = "smtp.mail.yahoo.com" }
+        "sendgrid"    { $HOSTNAME = "smtp.sendgrid.net" }
+        "mailgun"     { $HOSTNAME = "smtp.mailgun.org" }
+        "zoho"        { $HOSTNAME = "smtp.zoho.com" }
+        "protonmail"  { $HOSTNAME = "smtp.protonmail.com" }
+        "smtp2go"     { $HOSTNAME = "mail.smtp2go.com" }
+    }
+
+    try {
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($HOSTNAME, $PORT)
+        if ($tcpClient.Connected) {
+            Write-Host "SMTP Relay Test: Successfully connected to $HOSTNAME on port $PORT." -ForegroundColor Green
+            $tcpClient.Close()
+            return $true
+        }
+    }
+    catch {
+        Write-Host "SMTP Relay Test: Failed to connect to $HOSTNAME on port $PORT. $_" -ForegroundColor Red
+        return $false
+    }
+}
+("testsmtprelay", "smtprelaytest") | ForEach-Object {
+    Set-Alias -Name $_ -Value Test-SmtpRelay
+}
+
+function flushdns { Clear-DnsClientCache }
+
 function Test-NetSpeed {
     if (Test-CommandExists librespeed-cli) {
         librespeed-cli $args[0]
@@ -504,9 +547,37 @@ function Test-NetSpeed {
     Set-Alias -Name $_ -Value Test-NetSpeed
 }
 
-function flushdns { Clear-DnsClientCache }
+function Update-IPConfig {
+    ipconfig /release
+    ipconfig /renew
+}
+("resetip", "renewip", "updateip", "refreship") | ForEach-Object {
+    Set-Alias -Name $_ -Value Update-IPConfig
+} 
 
 function Get-PublicIP { (Invoke-WebRequest http://ifconfig.me/ip).Content }
+
+function Show-MyIP {
+    $interfaces = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | 
+        Where-Object { $_.IPAddress -ne "127.0.0.1" }
+    
+    Write-Host "Local IP Address(es):" -ForegroundColor Cyan
+    
+    if ($interfaces.Count -eq 0) {
+        Write-Host " - No IPv4 addresses found" -ForegroundColor Yellow
+        return
+    }
+    
+    foreach ($interface in $interfaces) {
+        $interfaceName = $interface.InterfaceAlias
+        $ipAddress = $interface.IPAddress
+        Write-Host " - $interfaceName : " -NoNewline -ForegroundColor Green
+        Write-Host "$ipAddress" -ForegroundColor Yellow
+    }
+}
+("myip", "getmyip", "showmyip", "whatsmyip") | ForEach-Object {
+    Set-Alias -Name $_ -Value Show-MyIP
+}
 #endregion
 
 #region PowerShell Updates
