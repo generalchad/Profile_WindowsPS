@@ -65,7 +65,7 @@ function Test-SmtpRelay {
         return # Stop processing if DNS fails
     }
 
-    # 4. Iterate through ports
+# 4. Iterate through ports
     foreach ($PORT in $PortList) {
         $ResultObject = [PSCustomObject]@{
             Hostname = $HOSTNAME
@@ -135,7 +135,8 @@ function Test-SmtpRelay {
             if ($tcpClient) { $tcpClient.Close(); $tcpClient.Dispose() }
         }
         
-        Write-Host ""
-        Write-Output $ResultObject
+        # CHANGED: Pipe directly to Format-List.
+        # This forces the output to flush immediately with standard spacing (one newline gap).
+        $ResultObject | Format-List
     }
 }
