@@ -1,53 +1,56 @@
-# -----------------------------------------------------------------------------
-# Microsoft.PowerShell_profile.ps1 - The Loader
-# -----------------------------------------------------------------------------
-$ProfileRoot = Split-Path $PROFILE
-
-# 1. Load Settings (Theme, Editor, PSReadline)
-$ConfigPath = Join-Path $ProfileRoot "Config"
-Get-ChildItem -Path $ConfigPath -Filter "*.ps1" | ForEach-Object { . $_.FullName }
-
-# 2. Load Functions & Utilities
-# We load these before aliases so aliases can reference them
-$ModuleFolders = @("Functions", "Utilities")
-foreach ($folder in $ModuleFolders) {
-    $path = Join-Path $ProfileRoot $folder
-    if (Test-Path $path) {
-        Get-ChildItem -Path $path -Filter "*.ps1" | ForEach-Object {
-            try {
-                . $_.FullName
-            } catch {
-                Write-Warning "Failed to load module $($_.Name): $_"
-            }
-        }
-    }
-}
-
-# 3. Load Aliases (Consolidated)
-$AliasFile = Join-Path $ConfigPath "Aliases.ps1"
-if (Test-Path $AliasFile) { . $AliasFile }
-
 # 4. Initialization (Zoxide, Oh-My-Posh, Icons)
-# Using 'try' blocks to prevent errors if tools aren't installed
+# -----------------------------------------------------------------------------
 
-# Terminal Icons
-try { Import-Module Terminal-Icons -ErrorAction Stop } catch {}
-
-# Oh-My-Posh (Cached)
-$OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
-$OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
-if ((Test-Path $OmpTheme) -and ((!(Test-Path $OmpCache)) -or ((Get-Item $OmpTheme).LastWriteTime -gt (Get-Item $OmpCache).LastWriteTime))) {
-    oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8
+# A. Terminal Icons (Fast enough to load directly)
+if (Get-Module -ListAvailable Terminal-Icons) {
+    Import-Module Terminal-Icons -ErrorAction SilentlyContinue
 }
-if (Test-Path $OmpCache) { . $OmpCache }
 
-# Zoxide (Cached)
-$ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
-if (-not (Test-Path $ZoxideCache)) {
-    if (Get-Command zoxide -ErrorAction SilentlyContinue) {
-        zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8
+# B. Oh-My-Posh (Smart Caching)
+$OmpTheme     = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
+$OmpCache     = Join-Path $env:TEMP "omp.cache.ps1"
+$ProfileTime  = (Get-Item $PROFILE).LastWriteTime
+
+if (Test-Path $OmpTheme) {
+    # We rebuild the cache if:
+    # 1. Cache file is missing
+    # 2. You edited your PROFILE recently (This fixes your current issue!)
+    # 3. You edited the THEME file recently
+    $NeedRebuild = -not (Test-Path $OmpCache)
+    
+    if (-not $NeedRebuild) {
+        $CacheTime = (Get-Item $OmpCache).LastWriteTime
+        $ThemeTime = (Get-Item $OmpTheme).LastWriteTime
+        if ($ProfileTime -gt $CacheTime -or $ThemeTime -gt $CacheTime) { $NeedRebuild = $true }
+    }
+
+    if ($NeedRebuild) {
+        # Generate new cache
+        $null = oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8 -Force
+    }
+
+    # Safety Check: If cache is valid (exists and has content), run it.
+    if ((Test-Path $OmpCache) -and (Get-Item $OmpCache).Length -gt 0) {
+        . $OmpCache
+    }
+    else {
+        # Fallback: If cache generation failed, run live so the shell doesn't break
+        oh-my-posh init pwsh --config "$OmpTheme" | Invoke-Expression
     }
 }
-if (Test-Path $ZoxideCache) { . $ZoxideCache }
 
-Write-Host "Profile Loaded." -ForegroundColor DarkGray
+# C. Zoxide (Binary Awareness)
+$ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
+if (Get-Command zoxide -ErrorAction SilentlyContinue) {
+    # Check if Zoxide binary is newer than the cache (e.g. you ran 'winget upgrade zoxide')
+    $ZoxideBinTime = (Get-Command zoxide).Source | Get-Item | Select-Object -ExpandProperty LastWriteTime
+    
+    if (-not (Test-Path $ZoxideCache) -or $ZoxideBinTime -gt (Get-Item $ZoxideCache).LastWriteTime) {
+        zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
+    }
+    . $ZoxideCache
+}
+else {
+    # Fallback: If Zoxide is not installed, use a simple alias for 'cd'
+    Set-Alias cd Set-Location
+}
