@@ -60,6 +60,48 @@ function New-File {
     }
 }
 
+function Invoke-Explorer {
+    <#
+    .SYNOPSIS
+        Opens a Windows File Explorer window at the specified path.
+    .DESCRIPTION
+        This function uses the 'explorer.exe' process to open a File Explorer
+        window to any local path, including network shares and UNC paths.
+        It defaults to the current working directory ('.').
+    .PARAMETER Path
+        The path to open in the File Explorer. This can be a directory 
+        or a file (which will open the containing folder and select the file).
+        Defaults to the current directory ('.').
+    .EXAMPLE
+        Invoke-Explorer 
+        # Opens File Explorer at the current directory.
+    .EXAMPLE
+        Invoke-Explorer C:\Users\Public\Documents
+        # Opens File Explorer at the specified absolute path.
+    .EXAMPLE
+        explorer | iex 
+        # Note: The alias 'explore' is often used instead of 'Invoke-Explorer'.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0)]
+        [string]$Path = "."
+    )
+    
+    process {
+        Write-Debug "Invoke-Explorer: Attempting to open explorer at '$Path'"
+        
+        try {
+            $resolvedPath = (Resolve-Path -Path $Path).ProviderPath
+            
+            Start-Process -FilePath "explorer.exe" -ArgumentList $resolvedPath -NoNewWindow
+        }
+        catch {
+            Write-Error "Invoke-Explorer: Could not resolve or open path '$Path'. Error: $($_.Exception.Message)"
+        }
+    }
+}
+
 function New-Folder {
     [CmdletBinding()]
     param(
