@@ -1,4 +1,4 @@
-function Optimize-VMwareNetwork {
+function Optimize-VMX {
     <#
     .SYNOPSIS
         VMware vNetwork Optimizer v8.0 Enterprise
