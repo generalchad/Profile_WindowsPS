@@ -1,6 +1,3 @@
-[CmdletBinding()]
-param ()
-
 function Restart-Explorer {
 <#
 .SYNOPSIS
@@ -14,7 +11,7 @@ settings have been changed.
     param ()
 
     Write-Verbose "Restarting Explorer.exe..."
-    
+
     try {
         Write-Debug "Stopping process Explorer.exe"
         Stop-Process -Name explorer -Force
@@ -26,5 +23,3 @@ settings have been changed.
 
     Write-Verbose "Starting Explorer.exe..."
 }
-
-Restart-Explorer @PSBoundParameters
