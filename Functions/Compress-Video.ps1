@@ -3,18 +3,18 @@
     Compresses video files using FFmpeg with configurable quality and output settings.
 
 .DESCRIPTION
-    Wrapper for FFmpeg to batch compress videos. Includes validation, logging, 
-    and safe file handling. optimized for x265 compression.
+    Wrapper for FFmpeg to batch compress videos. Includes validation, logging,
+    and safe file handling. Optimized for x265 compression.
 
 .EXAMPLE
     .\Compress-Video.ps1 -InputFilePath "C:\Videos" -Recurse
 #>
 
 #region Configuration
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+
 $script:Config = @{
     DefaultExtensions = @(".avi", ".flv", ".mp4", ".mov", ".mkv", ".wmv", ".ts", ".m4v")
-    # Changed preset to 'medium' for better speed/size balance. 
-    # Changed audio to AAC to ensure container compatibility.
     DefaultFFmpegArgs = @(
         '-i', '{INPUT}',
         '-c:v', 'libx265',
@@ -26,7 +26,7 @@ $script:Config = @{
     )
     MaxPathLength = 260
     MaxFileNameLength = 255
-    LogDirectory = Join-Path $PSScriptRoot "logs"
+    LogDirectory = Join-Path $scriptDir "logs"
 }
 #endregion
 
@@ -35,7 +35,7 @@ function Test-FFmpeg {
     [CmdletBinding()]
     [OutputType([bool])]
     param()
-    
+
     process {
         if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
             return $true
@@ -52,11 +52,11 @@ function Test-OutputPath {
         [Parameter(Mandatory, ValueFromPipeline)]
         [string]$Path
     )
-    
+
     begin {
         $invalidChars = [System.IO.Path]::GetInvalidFileNameChars()
     }
-    
+
     process {
         try {
             if ($Path.Length -gt 260) {
@@ -66,8 +66,8 @@ function Test-OutputPath {
 
             $parentDir = Split-Path -Path $Path -Parent
             if (-not (Test-Path -Path $parentDir -PathType Container)) {
-                Write-Error "Parent directory does not exist: $parentDir"
-                return $false
+                # Attempt to create the parent directory if it doesn't exist
+                New-Item -Path $parentDir -ItemType Directory -Force | Out-Null
             }
 
             $fileName = Split-Path -Path $Path -Leaf
@@ -92,7 +92,7 @@ function Test-AlreadyCompressed {
         [Parameter(Mandatory)]
         [System.IO.FileInfo]$File
     )
-    
+
     process {
         return $File.BaseName -match '_compressed$'
     }
@@ -109,16 +109,16 @@ function Get-VideoFiles {
 
         [Parameter()]
         [string[]]$Extensions = $script:Config.DefaultExtensions,
-        
+
         [Parameter()]
         [switch]$Recurse
     )
-    
+
     process {
         if (Test-Path $Path -PathType Leaf) {
             return (Get-Item -Force $Path)
         }
-        
+
         $searchParams = @{
             Path        = $Path
             File        = $true
@@ -127,8 +127,7 @@ function Get-VideoFiles {
             ErrorAction = 'SilentlyContinue'
         }
 
-        # Get all files and filter by extension in memory to handle multiple extensions cleanly
-        Get-ChildItem @searchParams | 
+        Get-ChildItem @searchParams |
             Where-Object { $Extensions -contains $_.Extension.ToLower() }
     }
 }
@@ -141,16 +140,22 @@ function New-CompressedPath {
         [System.IO.FileInfo]$File,
 
         [Parameter()]
-        [string]$CustomPath
+        [string]$CustomPath,
+
+        [Parameter()]
+        [switch]$IsBatchMode
     )
-    
+
     process {
         if ($CustomPath) {
-            # If CustomPath is a directory, append filename
+            # If processing multiple files, treat CustomPath strictly as a directory
+            if ($IsBatchMode) {
+                return Join-Path $CustomPath ($File.BaseName + "_compressed.mp4")
+            }
+
             if (Test-Path $CustomPath -PathType Container) {
                 return Join-Path $CustomPath ($File.BaseName + "_compressed.mp4")
             }
-            # If CustomPath looks like a file (ends in mp4), use it
             if ($CustomPath -match '\.mp4$') {
                 return $CustomPath
             }
@@ -161,7 +166,7 @@ function New-CompressedPath {
         if (-not (Test-AlreadyCompressed -File $File)) {
             $baseName += "_compressed"
         }
-        
+
         return Join-Path $File.DirectoryName "${baseName}.mp4"
     }
 }
@@ -183,40 +188,28 @@ function Invoke-FFmpeg {
 
         [switch]$DeleteSource
     )
-    
+
     process {
         try {
-            # Dynamic Argument Replacement
-            # We clone the array to avoid modifying the global config reference
-            $cmdArgs = $FFmpegArgs.Clone()
-
-            if ($cmdArgs -contains '{INPUT}') {
-                $idx = $cmdArgs.IndexOf('{INPUT}')
-                $cmdArgs[$idx] = $InputFile.FullName
-            }
-            # Fallback for old default config or custom args without placeholder
-            elseif ($cmdArgs[1] -match 'input\.') { 
-                 $cmdArgs[1] = $InputFile.FullName
-            }
-
-            if ($cmdArgs -contains '{OUTPUT}') {
-                $idx = $cmdArgs.IndexOf('{OUTPUT}')
-                $cmdArgs[$idx] = $OutputPath
-            }
-            # Fallback for old default config
-            elseif ($cmdArgs[-1] -match 'output\.') {
-                $cmdArgs[-1] = $OutputPath
+            # Safely replace placeholders without using Array.IndexOf
+            $cmdArgs = foreach ($arg in $FFmpegArgs) {
+                if ($arg -eq '{INPUT}') {
+                    $InputFile.FullName
+                } elseif ($arg -eq '{OUTPUT}') {
+                    $OutputPath
+                } else {
+                    $arg
+                }
             }
 
             Write-Verbose "Executing: ffmpeg $cmdArgs"
-            
-            # Using Start-Process to hide the console window or capture streams if needed later
-            # For now, running directly allows user to see FFmpeg progress bar
+
+            # Execute FFmpeg natively
             & ffmpeg $cmdArgs
-            
+
             if ($LASTEXITCODE -eq 0) {
                 $outputItem = Get-Item $OutputPath -ErrorAction SilentlyContinue
-                
+
                 if ($DeleteSource -and $outputItem) {
                     Remove-Item $InputFile.FullName -Force
                     Write-Verbose "Deleted source: $($InputFile.FullName)"
@@ -249,18 +242,21 @@ function Get-CompressionMetrics {
         [Parameter(Mandatory)]
         [PSCustomObject]$Result
     )
-    
+
     process {
-        if (-not $Result.Success) { return $null }
+        if (-not $Result.Success -or -not $Result.OutputFile) { return $null }
 
         $orig = $Result.InputFile.Length
         $new  = $Result.OutputFile.Length
-        
+
+        # Avoid divide by zero if input file is somehow 0 bytes
+        $savings = if ($orig -gt 0) { [Math]::Round(($orig - $new) / $orig * 100, 2) } else { 0 }
+
         [PSCustomObject]@{
             FileName       = $Result.InputFile.Name
             OriginalSizeMB = [Math]::Round($orig / 1MB, 2)
             NewSizeMB      = [Math]::Round($new / 1MB, 2)
-            SavingsPercent = [Math]::Round(($orig - $new) / $orig * 100, 2)
+            SavingsPercent = $savings
         }
     }
 }
@@ -312,29 +308,27 @@ function Compress-Video {
         }
 
         # Resolve Input
-        $resolvedInput = $InputFilePath
-        if (Test-Path $InputFilePath) {
-            $resolvedInput = (Resolve-Path $InputFilePath).Path
-        }
+        $resolvedInput = (Resolve-Path $InputFilePath).Path
 
-        # 1. Gather Files
+        # 1. Gather Files (Forced as array)
         Write-Host "Scanning for videos..." -ForegroundColor Cyan
-        $videosToProcess = Get-VideoFiles -Path $resolvedInput -Recurse:$Recurse -Extensions $Extensions
+        $videosToProcess = @(Get-VideoFiles -Path $resolvedInput -Recurse:$Recurse -Extensions $Extensions)
 
         if ($videosToProcess.Count -eq 0) {
             Write-Warning "No video files found in $resolvedInput"
-            Stop-Transcript
+            Stop-Transcript -ErrorAction SilentlyContinue
             return
         }
+
+        $isBatchMode = $videosToProcess.Count -gt 1
 
         # 2. List and Confirm
         Write-Host "`nFound $($videosToProcess.Count) files:" -ForegroundColor Yellow
         $videosToProcess | Select-Object -First 10 | ForEach-Object { Write-Host " - $($_.Name)" }
         if ($videosToProcess.Count -gt 10) { Write-Host " ... and $($videosToProcess.Count - 10) more." }
 
-        # Use $PSCmdlet.ShouldProcess to handle -WhatIf and Confirmation
         if ($PSCmdlet.ShouldProcess("Found $($videosToProcess.Count) videos", "Start Compression")) {
-            
+
             $stats = @()
             $counter = 0
 
@@ -347,16 +341,14 @@ function Compress-Video {
                 }
                 Write-Progress @progress
 
-                # Skip if already compressed
                 if (Test-AlreadyCompressed -File $video) {
                     Write-Verbose "Skipping $($video.Name) (Already compressed)"
                     continue
                 }
 
-                # Calculate Output Path
                 try {
-                    $destPath = New-CompressedPath -File $video -CustomPath $OutputFilePath
-                    
+                    $destPath = New-CompressedPath -File $video -CustomPath $OutputFilePath -IsBatchMode $isBatchMode
+
                     if (Test-Path $destPath) {
                         Write-Warning "Output file already exists: $destPath. Skipping."
                         continue
@@ -365,11 +357,9 @@ function Compress-Video {
                     if (-not (Test-OutputPath -Path $destPath)) { continue }
 
                     Write-Host "`nConverting: $($video.Name)" -ForegroundColor Cyan
-                    
-                    # Run Compression
+
                     $result = Invoke-FFmpeg -InputFile $video -OutputPath $destPath -FFmpegArgs $FFmpegArgs -DeleteSource:$DeleteSource
 
-                    # Calculate Stats
                     $metric = Get-CompressionMetrics -Result $result
                     if ($metric) {
                         $stats += $metric
@@ -380,20 +370,22 @@ function Compress-Video {
                     Write-Error "Failed to process $($video.Name): $_"
                 }
             }
-            
+
             # Summary
-            Write-Host "`n--- Summary ---" -ForegroundColor Cyan
-            $stats | Format-Table -AutoSize
-            
             if ($stats.Count -gt 0) {
+                Write-Host "`n--- Summary ---" -ForegroundColor Cyan
+                $stats | Format-Table -AutoSize
+
                 $totalSaved = ($stats | Measure-Object -Property SavingsPercent -Average).Average
                 Write-Host "Average Space Saved: $([Math]::Round($totalSaved, 2))%" -ForegroundColor Green
+            } else {
+                Write-Host "`nNo files were successfully compressed." -ForegroundColor Yellow
             }
         } else {
             Write-Warning "Operation Cancelled."
         }
 
-        Stop-Transcript
+        Stop-Transcript -ErrorAction SilentlyContinue
     }
 }
 #endregion
