@@ -347,7 +347,7 @@ function Compress-Video {
                 }
 
                 try {
-                    $destPath = New-CompressedPath -File $video -CustomPath $OutputFilePath -IsBatchMode $isBatchMode
+                    $destPath = New-CompressedPath -File $video -CustomPath $OutputFilePath -IsBatchMode:$isBatchMode
 
                     if (Test-Path $destPath) {
                         Write-Warning "Output file already exists: $destPath. Skipping."

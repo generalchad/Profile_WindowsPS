@@ -82,6 +82,7 @@ function Restore-ADStructure {
         $SubOUs = @(
             @{ Name = "Access"; Parent = "Groups" },
             @{ Name = "Distribution"; Parent = "Groups" },
+            @{ Name = "Roles"; Parent = "Groups" },
             @{ Name = "Management"; Parent = "Groups" },
             @{ Name = "Applications"; Parent = "Servers" },
             @{ Name = "Database"; Parent = "Servers" },
