@@ -4,7 +4,7 @@
 
 # --- PSFeedbackProvider ---
 if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction SilentlyContinue)) {
-    Enable-ExperimentalFeature PSFeedbackProvider -ErrorAction SilentlyContinue
+    Enable-ExperimentalFeature PSFeedbackProvider -ErrorAction SilentlyContinue 3>$null
 }
 
 # --- PSReadLine & Colors ---
@@ -26,7 +26,7 @@ Set-PSReadLineOption @PSReadLineOptions
 Set-PSReadLineOption -AddToHistoryHandler {
     param($Line)
     $sensitive = @("password", "secret", "key", "apikey", "token", "connectionstring")
-    if ($sensitive | Where-Object { $Line -like "*$_*" }) { return }
+    if ($sensitive | Where-Object { $Line -ilike "*$_*" }) { return }
 }
 
 # --- Editor Config ---
