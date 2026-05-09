@@ -16,8 +16,8 @@ function Optimize-PSX {
     begin {
         #region Configuration
         $VALID_ARCHIVE_EXTENSIONS = @('.7z', '.gz', '.rar', '.zip')
-        $VALID_IMAGE_EXTENSIONS = @('.cue', '.gdi', '.iso', '.bin', '.raw')
-        $SCRIPT_VERSION = "1.1.0"
+        $VALID_IMAGE_EXTENSIONS = @('.cue', '.gdi', '.iso', '.bin', '.raw', '.ccd', '.img', '.sub')
+        $SCRIPT_VERSION = "1.1.1"
         #endregion
 
         #region Internal Helper Functions
@@ -112,7 +112,7 @@ function Optimize-PSX {
             $coresToUse = [Math]::Max(1, [Math]::Floor($totalCores / 2))
             Write-Log "Using $coresToUse of $totalCores available CPU cores" -Level DEBUG
 
-            $primaryFiles = Get-ChildItem -LiteralPath $TargetFolder -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.cue', '.gdi') }
+            $primaryFiles = Get-ChildItem -LiteralPath $TargetFolder -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.cue', '.gdi', '.ccd') }
             $isoFiles = Get-ChildItem -LiteralPath $TargetFolder -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
                 $_.Extension -eq '.iso' -and
                 -not (Test-Path -LiteralPath (Join-Path $_.Directory "$($_.BaseName).cue")) -and
@@ -136,7 +136,9 @@ function Optimize-PSX {
 
             foreach ($image in $images) {
                 $processedImages++
-                Write-Progress -Activity "Converting images to CHD" -Status "$processedImages of $totalImages" -PercentComplete ($processedImages / $totalImages * 100)
+
+                # PARENT PROGRESS BAR (ID 1)
+                Write-Progress -Id 1 -Activity "Converting images to CHD" -Status "File $processedImages of ${totalImages}: $($image.Name)" -PercentComplete (($processedImages / $totalImages) * 100)
 
                 $chdFilePath = Join-Path $image.Directory.FullName "$($image.BaseName).chd"
 
@@ -154,74 +156,80 @@ function Optimize-PSX {
 
                 try {
                     Write-Log "Converting $($image.Name)..." -Level INFO -ForegroundColor Cyan
-                    $psi = New-Object System.Diagnostics.ProcessStartInfo
-                    $psi.FileName = $ChdmanPath
 
-                    if ($image.Extension -eq '.gdi') {
+                    # Force PowerShell into the directory of the image so chdman resolves relative .bin/.img files correctly
+                    Push-Location -LiteralPath $image.Directory.FullName
+
+                    # --- AUTO-HEAL .CUE FILES ---
+                    if ($image.Extension -eq '.cue') {
+                        Write-Log "Validating .cue file integrity..." -Level DEBUG
+
+                        # Read as raw text to strip any weird formatting
+                        $cueContent = Get-Content -LiteralPath $image.FullName -Raw
+
+                        # Find the actual .bin or .img file sitting next to it
+                        $localDataFiles = Get-ChildItem -LiteralPath $image.Directory.FullName -File | Where-Object { $_.Extension -match '^\.(bin|img)$' }
+
+                        if ($localDataFiles.Count -eq 1) {
+                            $actualDataName = $localDataFiles[0].Name
+
+                            # Regex: Look for FILE followed by anything, ending in BINARY, and replace it with the real filename
+                            $fixedCueContent = $cueContent -replace 'FILE\s+"?[^"]*"?\s+BINARY', "FILE `"$actualDataName`" BINARY"
+
+                            # If the content was wrong, or just to enforce ASCII encoding, rewrite the file
+                            # FIXED: Using $image.Length instead of Get-Item to bypass bracket wildcard bugs
+                            if ($cueContent -ne $fixedCueContent -or $image.Length -gt 0) {
+                                if ($cueContent -ne $fixedCueContent) {
+                                    Write-Log "Auto-correcting mismatched data file reference inside $($image.Name)" -Level WARNING
+                                }
+                                # Write back explicitly as ASCII. chdman will fail if the cue is UTF-16/UTF-8 BOM.
+                                Set-Content -LiteralPath $image.FullName -Value $fixedCueContent -Encoding Ascii
+                            }
+                        }
+                    }
+                    # --- GDI / OTHER LOGIC ---
+                    elseif ($image.Extension -eq '.gdi') {
                         Write-Log "Detected Dreamcast GDI image..." -Level DEBUG
                         $gdiContent = Get-Content -LiteralPath $image.FullName -ErrorAction Stop
                         if ($gdiContent) {
                             $firstTrack = $gdiContent | Select-Object -Skip 1 | Select-Object -First 1
                             $sectorSize = if ($firstTrack -match '2352|2048') { $matches[0] } else { '2352' }
                             Write-Log "Detected sector size: $sectorSize" -Level DEBUG
-                            $psi.Arguments = "createcd -i `"$($image.FullName)`" -o `"$chdFilePath`" --numprocessors $coresToUse"
                         }
                     } else {
                         Write-Log "Detected CD image..." -Level DEBUG
-                        $psi.Arguments = "createcd -i `"$($image.FullName)`" -o `"$chdFilePath`" --numprocessors $coresToUse"
                     }
 
-                    if ($ForceOverwrite) { $psi.Arguments += " --force" }
+                    $arguments = @("createcd", "-i", $image.Name, "-o", $chdFilePath, "--numprocessors", $coresToUse)
+                    if ($ForceOverwrite) { $arguments += "--force" }
 
-                    $psi.UseShellExecute = $false
-                    $psi.RedirectStandardOutput = $true
-                    $psi.RedirectStandardError = $true
-                    $psi.CreateNoWindow = $true
+                    Write-Log "Executing: $ChdmanPath $($arguments -join ' ')" -Level DEBUG
 
-                    Write-Log "Executing: $($psi.FileName) $($psi.Arguments)" -Level DEBUG
-
-                    $process = [System.Diagnostics.Process]::Start($psi)
                     $stdout = New-Object System.Text.StringBuilder
                     $stderr = New-Object System.Text.StringBuilder
-                    $progressLine = ""
 
-                    while (-not $process.HasExited) {
-                        if (-not $process.StandardOutput.EndOfStream) {
-                            $line = $process.StandardOutput.ReadLine()
-                            [void]$stdout.AppendLine($line)
-                            if ($line -match '(compression ratio|input size|output size|compressing|processing)') {
-                                Write-Host "`r$(' ' * $progressLine.Length)" -NoNewline
-                                Write-Host "`r$line" -NoNewline
-                                $progressLine = $line
-                            }
-                        }
-                        if (-not $process.StandardError.EndOfStream) {
-                            $line = $process.StandardError.ReadLine()
+                    & $ChdmanPath $arguments 2>&1 | ForEach-Object {
+                        $line = $_.ToString()
+
+                        if ($_ -is [System.Management.Automation.ErrorRecord]) {
                             [void]$stderr.AppendLine($line)
+                        } else {
+                            [void]$stdout.AppendLine($line)
                         }
-                        Start-Sleep -Milliseconds 100
+
+                        # CHILD PROGRESS BAR (ID 2 linked to ParentId 1)
+                        if ($line -match '(\d{1,3}(?:\.\d+)?)\s*%') {
+                            $percentValue = [math]::Min(100, [math]::Max(0, [math]::Round([double]$matches[1])))
+                            $statusText = $line -replace '\[.*?\]\s*', '' -replace '\s+', ' '
+
+                            Write-Progress -Id 2 -ParentId 1 -Activity "Running chdman" -Status $statusText.Trim() -PercentComplete $percentValue
+                        }
                     }
 
-                    if ($progressLine) {
-                        Write-Host "`r$(' ' * $progressLine.Length)" -NoNewline
-                        Write-Host "`r" -NoNewline
-                    }
+                    Write-Progress -Id 2 -Activity "Running chdman" -Completed
 
-                    while (-not $process.StandardOutput.EndOfStream) {
-                        $line = $process.StandardOutput.ReadLine()
-                        [void]$stdout.AppendLine($line)
-                        if ($line -match '(compression ratio|input size|output size)') { Write-Log $line -Level DEBUG }
-                    }
-
-                    $errorOutput = ""
-                    while (-not $process.StandardError.EndOfStream) {
-                        $line = $process.StandardError.ReadLine()
-                        [void]$stderr.AppendLine($line)
-                        $errorOutput += "$line`n"
-                    }
-
-                    if ($process.ExitCode -ne 0) {
-                        throw "chdman process exited with code $($process.ExitCode): $errorOutput"
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "chdman process exited with code ${LASTEXITCODE}: $($stderr.ToString().Trim())"
                     }
 
                     $successfulConversions++
@@ -234,15 +242,15 @@ function Optimize-PSX {
                 }
                 finally {
                     Write-Separator
+                    Pop-Location
                 }
             }
 
-            Write-Progress -Activity "Converting images to CHD" -Completed
+            Write-Progress -Id 1 -Activity "Converting images to CHD" -Completed
             $TotalConversions.Value += $successfulConversions
 
             if ($errorList.Count -gt 0) {
                 Write-Log "$($errorList.Count) conversion errors occurred:" -Level WARNING
-                # FIXED: Changed iterator from $error to $errItem
                 foreach ($errItem in $errorList) {
                     Write-Log "  - $errItem" -Level DEBUG
                 }
@@ -277,7 +285,8 @@ function Optimize-PSX {
 
             foreach ($archive in $archives) {
                 $processedArchives++
-                Write-Progress -Activity "Extracting archives" -Status "$processedArchives of $totalArchives" -PercentComplete ($processedArchives / $totalArchives * 100)
+                # Apply ID 1 to extraction to maintain consistency and avoid display glitches
+                Write-Progress -Id 1 -Activity "Extracting archives" -Status "$processedArchives of $totalArchives" -PercentComplete (($processedArchives / $totalArchives) * 100)
 
                 $extractPath = Join-Path $archive.Directory.FullName $archive.BaseName
 
@@ -328,12 +337,11 @@ function Optimize-PSX {
                 }
             }
 
-            Write-Progress -Activity "Extracting archives" -Completed
+            Write-Progress -Id 1 -Activity "Extracting archives" -Completed
             $TotalExtractions.Value += $successfulExtractions
 
             if ($errorList.Count -gt 0) {
                 Write-Log "$($errorList.Count) extraction errors occurred:" -Level WARNING
-                # FIXED: Changed iterator from $error to $errItem
                 foreach ($errItem in $errorList) {
                     Write-Log "  - $errItem" -Level DEBUG
                 }
@@ -376,7 +384,8 @@ function Optimize-PSX {
 
             foreach ($file in $candidates) {
                 $processedFiles++
-                Write-Progress -Activity "Deleting files" -Status "$processedFiles of $totalFiles" -PercentComplete ($processedFiles / $totalFiles * 100)
+                # Apply ID 1 to maintain consistency
+                Write-Progress -Id 1 -Activity "Deleting files" -Status "$processedFiles of $totalFiles" -PercentComplete (($processedFiles / $totalFiles) * 100)
 
                 if ($Force -or $PSCmdlet.ShouldProcess($file.FullName, "Delete file")) {
                     try {
@@ -388,7 +397,7 @@ function Optimize-PSX {
                 }
             }
 
-            Write-Progress -Activity "Deleting files" -Completed
+            Write-Progress -Id 1 -Activity "Deleting files" -Completed
             $FilesDeleted.Value += $deletedFiles
         }
         #endregion
