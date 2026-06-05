@@ -287,6 +287,9 @@ function Compress-Video {
         [switch]$Recurse,
 
         [Parameter()]
+        [switch]$SkipLog,
+
+        [Parameter()]
         [string[]]$Extensions = $script:Config.DefaultExtensions,
 
         [Parameter()]
@@ -296,15 +299,17 @@ function Compress-Video {
     process {
         if (-not (Test-FFmpeg)) { return }
 
-        # Setup Logging
-        $logDir = $script:Config.LogDirectory
-        if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
-        $logFile = Join-Path $logDir "CompressVideo_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+        if (-not (Skip-Log)) {
+            try {
+                # Setup Logging
+                $logDir = $script:Config.LogDirectory
+                if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
+                $logFile = Join-Path $logDir "CompressVideo_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 
-        try {
-            Start-Transcript -Path $logFile -Append -IncludeInvocationHeader -ErrorAction SilentlyContinue
-        } catch {
-            Write-Warning "Could not start transcript. Logging disabled."
+                Start-Transcript -Path $logFile -Append -IncludeInvocationHeader -ErrorAction SilentlyContinue
+            } catch {
+                Write-Warning "Could not start transcript. Logging disabled."
+            }
         }
 
         # Resolve Input
@@ -316,7 +321,10 @@ function Compress-Video {
 
         if ($videosToProcess.Count -eq 0) {
             Write-Warning "No video files found in $resolvedInput"
-            Stop-Transcript -ErrorAction SilentlyContinue
+            if (-not (Skip-Log))
+            {
+                Stop-Transcript -ErrorAction SilentlyContinue
+            }
             return
         }
 
