@@ -27,28 +27,18 @@ if (-not [string]::IsNullOrEmpty($env:EDITOR)) {
 }
 
 # 2. VS Code Logic
-$InsidersCmd = Get-Command code-insiders -ErrorAction SilentlyContinue
-if (-not $InsidersCmd) {
-    $LocalInsiders = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
-    if (Test-Path $LocalInsiders) { $InsidersCmd = $LocalInsiders }
-}
+$InsidersFile = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
+$StableFile   = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
 
-$StableCmd = Get-Command code -ErrorAction SilentlyContinue
-if (-not $StableCmd) {
-    $LocalStable = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\bin\code.cmd"
-    if (Test-Path $LocalStable) { $StableCmd = $LocalStable }
-}
-
-if ($InsidersCmd) {
-    # Insiders found! Point 'code' to Insiders.
-    Set-Alias -Name code -Value $InsidersCmd -Force
-    # Also ensure 'code-insiders' works if it wasn't in PATH
-    Set-Alias -Name code-insiders -Value $InsidersCmd -Force
-} elseif ($StableCmd) {
-    # Insiders missing, but Stable found! Point 'code' to Stable.
-    Set-Alias -Name code -Value $StableCmd -Force
+if (Test-Path $InsidersFile) {
+    # If Insiders exists, force BOTH aliases to point directly to its file
+    Set-Alias -Name code -Value $InsidersFile -Force
+    Set-Alias -Name code-insiders -Value $InsidersFile -Force
+} elseif (Test-Path $StableFile) {
+    # If only Stable exists, fallback
+    Set-Alias -Name code -Value $StableFile -Force
 } else {
-    Write-Warning "Neither VS Code Insiders nor VS Code Stable was found."
+    Write-Warning "Neither VS Code Insiders nor Stable executable was found."
 }
 
 # --- Filesystem ---
