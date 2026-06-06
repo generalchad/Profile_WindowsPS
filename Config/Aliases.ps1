@@ -26,22 +26,29 @@ if (-not [string]::IsNullOrEmpty($env:EDITOR)) {
     ("vim", "vi") | ForEach-Object { Set-Alias -Name $_ -Value $env:EDITOR -Force }
 }
 
-# 2. VS Code Logic (Fixed)
-# Check if 'code' command exists in PATH
-$CodeExists = Get-Command code -ErrorAction SilentlyContinue
-
-# If not in PATH, check standard Windows install location
-if (-not $CodeExists) {
-    $LocalCode = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\bin\code.cmd"
-    if (Test-Path $LocalCode) {
-        Set-Alias -Name code -Value $LocalCode -Force
-        $CodeExists = $true
-    }
+# 2. VS Code Logic
+$InsidersCmd = Get-Command code-insiders -ErrorAction SilentlyContinue
+if (-not $InsidersCmd) {
+    $LocalInsiders = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
+    if (Test-Path $LocalInsiders) { $InsidersCmd = $LocalInsiders }
 }
 
-# Only alias 'code-insiders' if 'code' is actually available
-if ($CodeExists -and (-not (Get-Command code-insiders -ErrorAction SilentlyContinue))) { 
-    Set-Alias -Name code-insiders -Value code 
+$StableCmd = Get-Command code -ErrorAction SilentlyContinue
+if (-not $StableCmd) {
+    $LocalStable = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\bin\code.cmd"
+    if (Test-Path $LocalStable) { $StableCmd = $LocalStable }
+}
+
+if ($InsidersCmd) {
+    # Insiders found! Point 'code' to Insiders.
+    Set-Alias -Name code -Value $InsidersCmd -Force
+    # Also ensure 'code-insiders' works if it wasn't in PATH
+    Set-Alias -Name code-insiders -Value $InsidersCmd -Force
+} elseif ($StableCmd) {
+    # Insiders missing, but Stable found! Point 'code' to Stable.
+    Set-Alias -Name code -Value $StableCmd -Force
+} else {
+    Write-Warning "Neither VS Code Insiders nor VS Code Stable was found."
 }
 
 # --- Filesystem ---
@@ -103,9 +110,9 @@ function export($name, $value) { Set-Item -Force -Path "env:$name" -Value $value
 function quit { exit }
 
 # Python wrapper - Simplified to allow interactive mode
-function py { 
+function py {
     if (Get-Command python -ErrorAction SilentlyContinue) {
-        python @args 
+        python @args
     } else {
         Write-Warning "Python not found."
     }
