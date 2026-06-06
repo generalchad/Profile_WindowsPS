@@ -8,6 +8,9 @@
 
 .EXAMPLE
     .\Compress-Video.ps1 -InputFilePath "C:\Videos" -Recurse
+
+.EXAMPLE
+    "C:\Videos1", "C:\Videos2" | .\Compress-Video.ps1 -Recurse
 #>
 
 #region Configuration
@@ -272,7 +275,6 @@ function Compress-Video {
     param (
         [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [Alias("Path", "p")]
-        [ValidateScript({ Test-Path $_ })]
         [string]$InputFilePath = (Get-Location).Path,
 
         [Parameter(Position = 1)]
@@ -296,48 +298,55 @@ function Compress-Video {
         [string[]]$FFmpegArgs = $script:Config.DefaultFFmpegArgs
     )
 
-    process {
-        if (-not (Test-FFmpeg)) { return }
-
-        if (-not (Skip-Log)) {
+    begin {
+        # Initialize Logging ONCE for the entire pipeline
+        $script:LoggingActive = $false
+        if (-not $SkipLog) {
             try {
-                # Setup Logging
                 $logDir = $script:Config.LogDirectory
                 if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
                 $logFile = Join-Path $logDir "CompressVideo_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 
                 Start-Transcript -Path $logFile -Append -IncludeInvocationHeader -ErrorAction SilentlyContinue
+                $script:LoggingActive = $true
             } catch {
                 Write-Warning "Could not start transcript. Logging disabled."
             }
         }
 
-        # Resolve Input
-        $resolvedInput = (Resolve-Path $InputFilePath).Path
+        # Initialize a list to hold stats across all pipeline inputs
+        $pipelineStats = [System.Collections.Generic.List[PSCustomObject]]::new()
+    }
 
-        # 1. Gather Files (Forced as array)
-        Write-Host "Scanning for videos..." -ForegroundColor Cyan
+    process {
+        if (-not (Test-FFmpeg)) { return }
+
+        # Resolve Input Safely
+        try {
+            $resolvedInput = (Resolve-Path $InputFilePath -ErrorAction Stop).Path
+        } catch {
+            Write-Error "Invalid or missing input path: $InputFilePath"
+            return
+        }
+
+        # 1. Gather Files
+        Write-Host "`nScanning for videos in $resolvedInput..." -ForegroundColor Cyan
         $videosToProcess = @(Get-VideoFiles -Path $resolvedInput -Recurse:$Recurse -Extensions $Extensions)
 
         if ($videosToProcess.Count -eq 0) {
-            Write-Warning "No video files found in $resolvedInput"
-            if (-not (Skip-Log))
-            {
-                Stop-Transcript -ErrorAction SilentlyContinue
-            }
+            Write-Warning "No video files found in $resolvedInput."
             return
         }
 
         $isBatchMode = $videosToProcess.Count -gt 1
 
         # 2. List and Confirm
-        Write-Host "`nFound $($videosToProcess.Count) files:" -ForegroundColor Yellow
+        Write-Host "Found $($videosToProcess.Count) files:" -ForegroundColor Yellow
         $videosToProcess | Select-Object -First 10 | ForEach-Object { Write-Host " - $($_.Name)" }
         if ($videosToProcess.Count -gt 10) { Write-Host " ... and $($videosToProcess.Count - 10) more." }
 
-        if ($PSCmdlet.ShouldProcess("Found $($videosToProcess.Count) videos", "Start Compression")) {
+        if ($PSCmdlet.ShouldProcess("Found $($videosToProcess.Count) videos in $resolvedInput", "Start Compression")) {
 
-            $stats = @()
             $counter = 0
 
             foreach ($video in $videosToProcess) {
@@ -370,7 +379,7 @@ function Compress-Video {
 
                     $metric = Get-CompressionMetrics -Result $result
                     if ($metric) {
-                        $stats += $metric
+                        $pipelineStats.Add($metric)
                         Write-Host " [OK] Saved $($metric.SavingsPercent)%" -ForegroundColor Green
                     }
                 }
@@ -378,22 +387,27 @@ function Compress-Video {
                     Write-Error "Failed to process $($video.Name): $_"
                 }
             }
-
-            # Summary
-            if ($stats.Count -gt 0) {
-                Write-Host "`n--- Summary ---" -ForegroundColor Cyan
-                $stats | Format-Table -AutoSize
-
-                $totalSaved = ($stats | Measure-Object -Property SavingsPercent -Average).Average
-                Write-Host "Average Space Saved: $([Math]::Round($totalSaved, 2))%" -ForegroundColor Green
-            } else {
-                Write-Host "`nNo files were successfully compressed." -ForegroundColor Yellow
-            }
         } else {
-            Write-Warning "Operation Cancelled."
+            Write-Warning "Operation Cancelled for $resolvedInput."
+        }
+    }
+
+    end {
+        # Generate Final Summary across ALL inputs
+        if ($pipelineStats.Count -gt 0) {
+            Write-Host "`n--- Overall Compression Summary ---" -ForegroundColor Cyan
+            $pipelineStats | Format-Table -AutoSize
+
+            $totalSaved = ($pipelineStats | Measure-Object -Property SavingsPercent -Average).Average
+            Write-Host "Average Space Saved: $([Math]::Round($totalSaved, 2))%" -ForegroundColor Green
+        } else {
+            Write-Host "`nNo files were successfully compressed." -ForegroundColor Yellow
         }
 
-        Stop-Transcript -ErrorAction SilentlyContinue
+        # Safely tear down logging ONCE at the very end
+        if ($script:LoggingActive) {
+            Stop-Transcript -ErrorAction SilentlyContinue
+        }
     }
 }
 #endregion
