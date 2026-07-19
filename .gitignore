@@ -26,6 +26,6 @@
 # 5. Whitelist Exceptions (Re-ignore specific subfolders and contents)
 Functions/logs/
 
-# 6. Specific Module Whitelist (MediaRenamer)
-!Modules/MediaRenamer/
-!Modules/MediaRenamer/**
+# 6. Specific Module Whitelist
+!Modules/Optimize-PSX/**
+!Modules/Rename-MediaFile/**

@@ -1,26 +1,42 @@
 # -----------------------------------------------------------------------------
-# Microsoft.PowerShell_profile.ps1 - The Loader
+# Microsoft.PowerShell_profile.ps1 - The Optimized Loader
 # -----------------------------------------------------------------------------
 $ProfileRoot = Split-Path $PROFILE
 
 # 1. Load Settings (Theme, Editor, PSReadline)
 $ConfigPath = Join-Path $ProfileRoot "Config"
-Get-ChildItem -Path $ConfigPath -Filter "*.ps1" | ForEach-Object { . $_.FullName }
+if (Test-Path $ConfigPath) {
+    # Using high-performance .NET file enumeration to skip Get-ChildItem object overhead
+    foreach ($File in [System.IO.Directory]::GetFiles($ConfigPath, "*.ps1")) {
+        . $File
+    }
+}
 
-# 2. Load Functions & Utilities
-# We load these before aliases so aliases can reference them
-$ModuleFolders = @("Functions", "Utilities")
-foreach ($folder in $ModuleFolders) {
-    $path = Join-Path $ProfileRoot $folder
-    if (Test-Path $path) {
-        Get-ChildItem -Path $path -Filter "*.ps1" | ForEach-Object {
+# 2. Load Functions & Utilities (Loose Script Blocks)
+# Replaced high-overhead pipelines with native foreach loops
+foreach ($Folder in "Functions", "Utilities") {
+    $Path = Join-Path $ProfileRoot $Folder
+    if (Test-Path $Path) {
+        foreach ($File in [System.IO.Directory]::GetFiles($Path, "*.ps1")) {
             try {
-                . $_.FullName
+                . $File
             } catch {
-                Write-Warning "Failed to load module $($_.Name): $_"
+                Write-Warning "Failed to load script $($File): $_"
             }
         }
     }
+}
+
+# 2.5 Register Custom Modules (Leveraging Lazy-Loading Autoload)
+$LocalModulesPath = Join-Path $ProfileRoot "Modules"
+if (Test-Path $LocalModulesPath) {
+    $PathSeparator = [IO.Path]::PathSeparator
+    $CurrentPaths = $env:PSModulePath -split $PathSeparator
+    if ($LocalModulesPath -notin $CurrentPaths) {
+        $env:PSModulePath = "$LocalModulesPath$PathSeparator$env:PSModulePath"
+    }
+    # NOTE: Explicit 'Import-Module Rename-MediaFile' removed.
+    # PowerShell will now auto-load it instantly on-demand the first time you invoke it.
 }
 
 # 3. Load Aliases (Consolidated)
@@ -28,10 +44,8 @@ $AliasFile = Join-Path $ConfigPath "Aliases.ps1"
 if (Test-Path $AliasFile) { . $AliasFile }
 
 # 4. Initialization (Zoxide, Oh-My-Posh, Icons)
-# Using 'try' blocks to prevent errors if tools aren't installed
-
-# Terminal Icons
-try { Import-Module Terminal-Icons -ErrorAction Stop } catch {}
+# Terminal-Icons alters directory formatting, so it requires an explicit import
+try { Import-Module Terminal-Icons -ErrorAction SilentlyContinue } catch {}
 
 # Oh-My-Posh (Cached)
 $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
