@@ -5,9 +5,9 @@ function Rename-MediaFile {
     .SYNOPSIS
         Renames media files and parent season/extras folders to adhere to Plex and Jellyfin naming conventions.
     .DESCRIPTION
-        Analyzes file names and folder structures to extract Show, Season, Episode, and Bonus feature information.
-        Renames media files to 'Show Name - SXXEXX.ext', scrubs unindexed DVD extras into clean titles,
-        and standardizes miscellaneous folders into official Plex/Jellyfin Local Extras directories.
+        Analyzes file names and folder structures to extract Show, Season, Episode, Episode Title, and Bonus feature information.
+        Renames media files to 'Show Name - SXXEXX - Episode Title.ext' (or 'Show Name - SXXEXX.ext' if no title exists),
+        scrubs unindexed DVD extras into clean titles, and standardizes miscellaneous folders into official Plex/Jellyfin Local Extras directories.
     .EXAMPLE
         Rename-MediaFile -TargetDirectory "D:\Media\TV Shows"
     .EXAMPLE
@@ -31,13 +31,14 @@ function Rename-MediaFile {
 
     begin {
         # --- REGEX COMPILE BLOCK ---
-        $RegexScenario1 = '^(?<Show>.*?)[._\s]+[sS](?<Season>\d+)[eE](?<Episode>\d+).*$|^(?<Show>.*?)[._\s]+(?<Season>\d+)x(?<Episode>\d+).*$'
+        # Updated to capture optional trailing episode titles while handling both S01E01 and 1x01 formats
+        $RegexScenario1 = '^(?<Show>.*?)[._\s]+[sS](?<Season>\d+)[eE](?<Episode>\d+)(?:[._\s-]+(?<Title>.*?))?$|^(?<Show>.*?)[._\s]+(?<Season>\d+)x(?<Episode>\d+)(?:[._\s-]+(?<Title>.*?))?$'
         $RegexSeasonDir = '^(?:.*?[._\s-]+)?(?:[sS]eason|[sS]taffel|[sS]eries|S)[\s._-]*0*(?<Season>\d+)(?:[._\s-].*)?$'
 
         # Regex to detect if a file or folder is a bonus/extra edge case
         $RegexExtrasKeywords = '(?i)(?:extra|bonus|outtake|blooper|gag|bts|behind.*?scene|deleted|interview|featurette|special|trailer|promo|dvd)'
 
-        # Regex to scrub common release group and encoding junk from bonus filenames
+        # Regex to scrub common release group and encoding junk from bonus filenames and episode titles
         $RegexSceneJunk = '(?i)\b(?:dvdrip|xvid|divx|ffndvd|gore|dimension|h264|x264|hevc|1080p|720p|480p|bluray|web-dl|webrip|aac|mp3|ac3|flac|remux|dvd|xvid-.*|dvdrip-.*)\b'
 
         $WordMap = @{ 'one'='01'; 'two'='02'; 'three'='03'; 'four'='04'; 'five'='05'; 'six'='06'; 'seven'='07'; 'eight'='08'; 'nine'='09'; 'ten'='10' }
@@ -96,6 +97,7 @@ function Rename-MediaFile {
                 $ShowName = $null
                 $SeasonStr = $null
                 $EpisodeStr = $null
+                $EpisodeTitle = $null
                 $NewFileName = $null
                 $IsExtra = $false
 
@@ -104,20 +106,23 @@ function Rename-MediaFile {
                     $ShowName = $Matches.Show -replace '[._\s]+', ' '
                     $SeasonStr = $Matches.Season
                     $EpisodeStr = $Matches.Episode
+                    if ($Matches.Title) { $EpisodeTitle = $Matches.Title }
                 }
                 # --- SCENARIO 2: Standard Folder Fallback ---
-                elseif ($ParentDir -match '^[sS]eason\s*(?<Season>\d+)$' -and ($OldName -match '(?:Episode|Ep|Ep\.|_)\s*(?<Episode>\d+)' -or $OldName -match '^(?<Episode>\d+)$')) {
+                elseif ($ParentDir -match '^[sS]eason\s*(?<Season>\d+)$' -and ($OldName -match '^(?:Episode|Ep|Ep\.|_)\s*(?<Episode>\d+)(?:[._\s-]+(?<Title>.*?))?$' -or $OldName -match '^(?<Episode>\d+)(?:[._\s-]+(?<Title>.*?))?$')) {
                     $ShowName = $GrandParentDir
                     $SeasonStr = $Matches.Season
                     $EpisodeStr = $Matches.Episode
+                    if ($Matches.Title) { $EpisodeTitle = $Matches.Title }
                 }
                 # --- SCENARIO 3: Textual Number Fallback ---
-                elseif ($ParentDir -match '^[sS]eason\s*(?<Season>\d+)$' -and $OldName -match '(?:Episode|Ep)\s+(?<Word>\w+)') {
+                elseif ($ParentDir -match '^[sS]eason\s*(?<Season>\d+)$' -and $OldName -match '^(?:Episode|Ep)\s+(?<Word>\w+)(?:[._\s-]+(?<Title>.*?))?$') {
                     $TargetWord = $Matches.Word.ToLower()
                     if ($WordMap.ContainsKey($TargetWord)) {
                         $ShowName = $GrandParentDir
                         $SeasonStr = $Matches.Season
                         $EpisodeStr = $WordMap[$TargetWord]
+                        if ($Matches.Title) { $EpisodeTitle = $Matches.Title }
                     }
                 }
                 # --- SCENARIO 4: EDGE CASE - Bonus / Extras File Cleaner ---
@@ -141,7 +146,18 @@ function Rename-MediaFile {
                     $ShowName = (Get-Culture).TextInfo.ToTitleCase($ShowName.Trim())
                     $FinalSeason = [int]$SeasonStr
                     $FinalEpisode = [int]$EpisodeStr
-                    $NewFileName = "{0} - S{1:D2}E{2:D2}{3}" -f $ShowName, $FinalSeason, $FinalEpisode, $Extension
+
+                    # Scrub junk and formatting from episode title if present
+                    if ($EpisodeTitle) {
+                        $EpisodeTitle = $EpisodeTitle -replace $RegexSceneJunk, '' -replace '[._]+', ' ' -replace '\s+', ' '
+                        $EpisodeTitle = $EpisodeTitle.Trim(' ', '-', '_', '.')
+                    }
+
+                    if (![string]::IsNullOrWhiteSpace($EpisodeTitle)) {
+                        $NewFileName = "{0} - S{1:D2}E{2:D2} - {3}{4}" -f $ShowName, $FinalSeason, $FinalEpisode, $EpisodeTitle, $Extension
+                    } else {
+                        $NewFileName = "{0} - S{1:D2}E{2:D2}{3}" -f $ShowName, $FinalSeason, $FinalEpisode, $Extension
+                    }
                 }
 
                 # --- EXECUTE FILE RENAME ---
