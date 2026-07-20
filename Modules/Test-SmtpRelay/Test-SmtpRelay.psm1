@@ -83,20 +83,26 @@ function Test-SmtpRelay {
                 $IPAddresses = [System.Net.Dns]::GetHostAddresses($TargetHost)
 
                 if ($IPAddresses.Count -gt 0) {
-                    # Display the complete list of resolved IP addresses without truncation
-                    $IPList = ($IPAddresses.IPAddressToString) -join ", "
-
                     Write-Host " [OK]" -ForegroundColor Green
-                    Write-Host "   -> $($IPAddresses.Count) address(es): $IPList" -ForegroundColor DarkGray
+                    Write-Host "   -> $($IPAddresses.Count) address(es):" -ForegroundColor DarkGray
+
+                    # Print each IP on its own line indented relative to the header
+                    foreach ($IP in $IPAddresses) {
+                        Write-Host "      $($IP.IPAddressToString)" -ForegroundColor DarkGray
+                    }
+
+                    # Empty newline after IP list
+                    Write-Host ""
                 }
             }
             catch {
                 Write-Host " [FAILED]" -ForegroundColor Red
-                Write-Host "   ! TIP: Check if the system has valid DNS Servers (e.g., 8.8.8.8) and Gateway." -ForegroundColor DarkRed
+                Write-Host "   ! TIP: Check if the system has valid DNS Servers (e.g., 8.8.8.8) and Gateway.`n" -ForegroundColor DarkRed
                 return
             }
 
             $SkipPort25 = $false
+            $ExitNodeName = ""
             if (Get-Command tailscale -ErrorAction SilentlyContinue) {
                 try {
                     $TsStatus = tailscale status --json | ConvertFrom-Json
@@ -109,13 +115,12 @@ function Test-SmtpRelay {
                         $ExitNodeName = $TsStatus.ExitNodeStatus.Label
                         if (-not $ExitNodeName) { $ExitNodeName = $TsStatus.ExitNodeStatus.ID }
                         if (-not $ExitNodeName) { $ExitNodeName = $TsStatus.ExitNodeID }
-
-                        Write-Host "   [INFO] Tailscale Exit Node Active ($ExitNodeName). Port 25 will be skipped." -ForegroundColor Magenta
                     }
                 } catch {}
             }
 
-            Write-Host "" # Spacer
+            # Heading matching 'Resolving DNS...' styling
+            Write-Host "Testing Ports..." -ForegroundColor Cyan
 
             $BatchResults = @()
 
@@ -126,10 +131,11 @@ function Test-SmtpRelay {
                     Banner = ""
                 }
 
-                Write-Host "   Checking Port $PORT... " -NoNewline -ForegroundColor Gray
+                Write-Host "   Checking TCP Port $PORT... " -NoNewline -ForegroundColor Gray
 
                 if ($PORT -eq 25 -and $SkipPort25) {
-                    Write-Host "[SKIPPED]" -ForegroundColor Yellow
+                    $SkipLabel = if ($ExitNodeName) { "[SKIPPED - Tailscale Exit Node ($ExitNodeName) Active]" } else { "[SKIPPED - Tailscale Exit Node Active]" }
+                    Write-Host $SkipLabel -ForegroundColor Yellow
                     $ResultObject.Status = "SKIPPED"
                     $ResultObject.Banner = "Blocked by Tailscale Policy"
                     $BatchResults += [PSCustomObject]$ResultObject
@@ -171,7 +177,6 @@ function Test-SmtpRelay {
                             $ServerBanner = $Reader.ReadLine()
 
                             if (-not [string]::IsNullOrWhiteSpace($ServerBanner)) {
-                                $Prefix = if ($PORT -eq 465) { "[TLS] " } else { "" }
                                 $ResultObject.Banner = $Prefix + $ServerBanner.Trim()
                             } else {
                                 $ResultObject.Banner = if ($PORT -eq 465) { "[TLS] (No Banner)" } else { "(No Banner)" }
@@ -207,7 +212,7 @@ function Test-SmtpRelay {
                 $BatchResults += [PSCustomObject]$ResultObject
             }
 
-            Write-Host ""
+            # Directly pipe to Format-Table without extra Write-Host calls to maintain clean 1-line spacing
             $BatchResults | Format-Table -AutoSize
         }
     }
