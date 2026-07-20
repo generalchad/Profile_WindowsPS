@@ -31,3 +31,5 @@ Functions/logs/
 !Modules/Optimize-PSX/**
 !Modules/Rename-MediaFile/
 !Modules/Rename-MediaFile/**
+!Modules/Test-SmtpRelay/
+!Modules/Test-SmtpRelay/**
