@@ -36,7 +36,7 @@ function Rename-MediaFile {
         $RegexSeasonDir = '^(?:.*?[._\s-]+)?(?:[sS]eason|[sS]taffel|[sS]eries|S)[\s._-]*0*(?<Season>\d+)(?:[._\s-].*)?$'
 
         # Regex to detect if a file or folder is a bonus/extra edge case
-        $RegexExtrasKeywords = '(?i)(?:extra|bonus|outtake|blooper|gag|bts|behind.*?scene|deleted|interview|featurette|special|trailer|promo|dvd)'
+        $RegexExtrasKeywords = '(?i)(?:extra|extras|bonus|outtake|blooper|gag|bts|behind.*?scene|deleted|interview|featurette|special|trailer|promo|dvd|doc|documentary)'
 
         # Regex to scrub common release group and encoding junk from bonus filenames and episode titles
         $RegexSceneJunk = '(?i)\b(?:dvdrip|xvid|divx|ffndvd|gore|dimension|h264|x264|hevc|1080p|720p|480p|bluray|web-dl|webrip|aac|mp3|ac3|flac|remux|dvd|xvid-.*|dvdrip-.*)\b'
@@ -49,7 +49,8 @@ function Rename-MediaFile {
             '(?i)(?:delete|cut.*?scene)'                           = 'Deleted Scenes'
             '(?i)(?:interview|cast.*?comment)'                     = 'Interviews'
             '(?i)(?:trailer|promo|teaser)'                         = 'Trailers'
-            '(?i)(?:extra|bonus|feature|misc|dvd|special.*feature)' = 'Featurettes'
+            # Catch-all for documentaries, generic bonuses, and DVDs defaults to 'Extras'
+            '(?i)(?:doc|documentary|extra|extras|bonus|feature|misc|dvd|special.*feature)' = 'Extras'
         }
 
         # Track execution statistics for the dashboard
@@ -108,6 +109,17 @@ function Rename-MediaFile {
                     $EpisodeStr = $Matches.Episode
                     if ($Matches.Title) { $EpisodeTitle = $Matches.Title }
                 }
+                # --- SCENARIO 1b: Miniseries / Part-based Filename ---
+                elseif ($OldName -match '^(?<Show>.*?)[._\s]+[pP]art[._\s]+(?<Episode>\d+)(?:[._\s]+(?<Title>.*?))?$') {
+                    $ShowName = $Matches.Show.Trim()
+                    $SeasonStr = "1" # Miniseries are always indexed as Season 1
+                    $EpisodeStr = $Matches.Episode
+                    $EpisodeTitle = $null
+                    if ($Matches.Title) {
+                        # Strip any trailing custom tags like (1080p My Private Collection) or [Remux]
+                        $EpisodeTitle = $Matches.Title -replace '\s*(?:\([^)]+\)|\[[^\]]+\])+$', ''
+                    }
+                }
                 # --- SCENARIO 2: Standard Folder Fallback ---
                 elseif ($ParentDir -match '^[sS]eason\s*(?<Season>\d+)$' -and ($OldName -match '^(?:Episode|Ep|Ep\.|_)\s*(?<Episode>\d+)(?:[._\s-]+(?<Title>.*?))?$' -or $OldName -match '^(?<Episode>\d+)(?:[._\s-]+(?<Title>.*?))?$')) {
                     $ShowName = $GrandParentDir
@@ -143,6 +155,10 @@ function Rename-MediaFile {
 
                 # --- BUILD STANDARD EPISODE FILENAME IF NOT AN EXTRA ---
                 if (-not $IsExtra -and $ShowName -and $SeasonStr -and $EpisodeStr) {
+
+                    # REPAIR/PREVENT: Strip errant dashes, dots, or spaces from the ends of the ShowName
+                    $ShowName = $ShowName -replace '^[\s._-]+|[\s._-]+$', ''
+
                     $ShowName = (Get-Culture).TextInfo.ToTitleCase($ShowName.Trim())
                     $FinalSeason = [int]$SeasonStr
                     $FinalEpisode = [int]$EpisodeStr
