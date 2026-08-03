@@ -12,7 +12,7 @@
 RootModule = 'Rename-MediaFile.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.0.1'
+ModuleVersion = '0.2.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -30,7 +30,7 @@ CompanyName = 'Unknown'
 Copyright = '(c) GenChadT. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Media renaming module for Plex and Jellyfin standards.'
+Description = 'Media renaming module for Plex and Jellyfin standards. Renames videos, subtitle sidecars and folders, detects subtitle language, and optionally removes scene junk files.'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '7.6'
@@ -87,7 +87,28 @@ AliasesToExport = '*'
 # ModuleList = @()
 
 # List of all files packaged with this module
-# FileList = @()
+FileList = @(
+    'Rename-MediaFile.psd1'
+    'Rename-MediaFile.psm1'
+    'Private\_Config.ps1'
+    'Private\Format-EpisodeFileName.ps1'
+    'Private\Format-MediaTitle.ps1'
+    'Private\Format-SubtitleFileName.ps1'
+    'Private\Get-JunkFile.ps1'
+    'Private\Get-MediaScore.ps1'
+    'Private\Get-SubtitleFile.ps1'
+    'Private\Get-SubtitleLanguage.ps1'
+    'Private\Invoke-RenamePlan.ps1'
+    'Private\Read-SubtitleLanguageChoice.ps1'
+    'Private\Read-SubtitleSample.ps1'
+    'Private\Remove-FileSafely.ps1'
+    'Private\Resolve-DirectoryName.ps1'
+    'Private\Resolve-EpisodeName.ps1'
+    'Private\Resolve-ExtraName.ps1'
+    'Private\Resolve-MovieName.ps1'
+    'Private\Show-RenamePreview.ps1'
+    'Public\Rename-MediaFile.ps1'
+)
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
 PrivateData = @{
@@ -95,7 +116,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        # Tags = @()
+        Tags = @('Plex', 'Jellyfin', 'Media', 'Rename', 'Subtitles', 'Kodi')
 
         # A URL to the license for this module.
         # LicenseUri = ''
@@ -107,7 +128,29 @@ PrivateData = @{
         # IconUri = ''
 
         # ReleaseNotes of this module
-        # ReleaseNotes = ''
+        ReleaseNotes = @'
+0.2.0
+  - Refactored the single monolithic .psm1 into Private\ and Public\ files
+    with a thin loader. Helper scriptblocks are now real functions, which
+    also removes a latent $Matches clobbering bug in show-name resolution.
+  - Added subtitle sidecar support: discovery beside the video and inside
+    Subs\ folders, association with the correct video, and renaming to the
+    Plex/Jellyfin "<video>.<lang>[.sdh|.forced].srt" convention.
+  - Subtitle language detection cascade: filename/folder tokens, then
+    encoding-aware content analysis, then an optional interactive prompt.
+    Common-but-incorrect codes (cn, jp, gr, cz, dk, se, ua) are corrected.
+  - Added -SubtitleLanguageOnly for correcting codes in an already
+    organised library without touching any other names.
+  - Subtitles in Subs\ are flattened beside the video by default
+    (-NoFlattenSubtitleFolders to opt out). .idx/.sub pairs rename atomically.
+  - Added opt-in junk file removal (-RemoveJunkFiles) via the Recycle Bin.
+    .nfo files are never treated as junk.
+  - Replaced the clipping Format-Table preview with a full-width, colour
+    coded, paged report.
+
+0.0.1
+  - Initial release.
+'@
 
         # Prerelease string of this module
         # Prerelease = ''
