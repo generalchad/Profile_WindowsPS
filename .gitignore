@@ -31,6 +31,8 @@ Functions/logs/
 !Modules/Optimize-PSX/**
 !Modules/Rename-MediaFile/
 !Modules/Rename-MediaFile/**
+!Modules/Restart-NetworkStack/
+!Modules/Restart-NetworkStack/**
 !Modules/Test-FileShare/
 !Modules/Test-FileShare/**
 !Modules/Test-SmtpRelay/
