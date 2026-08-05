@@ -21,6 +21,7 @@ function Optimize-VMX {
     .PARAMETER AutoApprove
         Bypasses the interactive prompt and automatically applies all recommended changes.
     #>
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         [string]$Path = "D:\Virtual Machines",
         [switch]$Recurse,
@@ -84,11 +85,31 @@ function Optimize-VMX {
     if ($zombies) {
         Write-Log "WARN" "Active 'vmware-vmx' processes found. Close VMware Workstation/Player."
         $k = Read-Host "    > Kill processes? [Y/N]"
-        if ($k -eq 'Y') { Stop-Process -Name vmware-vmx -Force; Start-Sleep 1 } else { return }
+        if ($k -eq 'Y') {
+            Stop-Process -Name vmware-vmx -Force
+
+            # Give VMware a chance to fully release file locks before we proceed. Poll
+            # rather than a flat sleep, since a fixed 1s wait can be too short under load
+            # (many running VMs) and unnecessarily long when the process exits instantly.
+            $waited = 0
+            $pollIntervalMs = 250
+            $maxWaitMs = 5000
+            while ((Get-Process vmware-vmx -ErrorAction SilentlyContinue) -and ($waited -lt $maxWaitMs)) {
+                Start-Sleep -Milliseconds $pollIntervalMs
+                $waited += $pollIntervalMs
+            }
+            if (Get-Process vmware-vmx -ErrorAction SilentlyContinue) {
+                Write-Log "WARN" "vmware-vmx still running after ${maxWaitMs}ms wait" "Proceeding anyway"
+            }
+        } else { return }
     }
 
     $vmxFiles = Get-ChildItem -Path $Path -Filter "*.vmx" -Recurse:$Recurse
     $stats = @{ Scanned=0; Optimized=0; Failed=0; Skipped=0 }
+
+    if ($vmxFiles.Count -eq 0) {
+        Write-Log "WARN" "No .vmx files found" $Path
+    }
 
     foreach ($file in $vmxFiles) {
         $vmName = $file.BaseName
@@ -118,7 +139,10 @@ function Optimize-VMX {
             $adapters = [regex]::Matches($rawContent, 'ethernet(\d+)\.') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
             foreach ($idx in $adapters) {
                 $key = "ethernet$idx.virtualDev"
-                if (-not ($rawContent -match [regex]::Escape($key) + "\s*=\s*`"$recNet`"")) {
+                # Anchored to line start/end (multiline) so this can never ambiguously match
+                # a different adapter's line (e.g. ethernet1 vs ethernet10).
+                $currentValuePattern = "(?m)^\s*" + [regex]::Escape($key) + "\s*=\s*`"$recNet`"\s*$"
+                if (-not ($rawContent -match $currentValuePattern)) {
                     $pendingChanges += [PSCustomObject]@{ Property = $key; NewValue = $recNet }
                 }
             }
@@ -132,6 +156,11 @@ function Optimize-VMX {
                         # Disabling auto-upgrade prevents VMware from overwriting our pinned hardware version later
                         $pendingChanges += [PSCustomObject]@{ Property = "tools.upgrade.policy"; NewValue = "manual" }
                     }
+
+                    # Only one hardware-pinning rule should ever apply to a given guestOS. Stopping
+                    # here prevents conflicting/duplicate virtualHW.version changes if the rule table
+                    # is ever extended with overlapping patterns.
+                    break
                 }
             }
 
@@ -162,20 +191,26 @@ function Optimize-VMX {
                 if ($choice -match '^[Aa]') { $AutoApprove = $true; $choice = 'Y' }
 
                 if ($choice -match '^[Yy]') {
-                    foreach ($change in $pendingChanges) {
-                        $currentContent = Set-VMXSetting -ContentLines $currentContent -Key $change.Property -Value $change.NewValue
+                    if ($PSCmdlet.ShouldProcess($file.FullName, "Apply $($pendingChanges.Count) VMX setting change(s)")) {
+                        foreach ($change in $pendingChanges) {
+                            $currentContent = Set-VMXSetting -ContentLines $currentContent -Key $change.Property -Value $change.NewValue
+                        }
+
+                        if (-not $NoBackup) { Copy-Item $file.FullName ($file.FullName + ".bak") -Force }
+
+                        # VMware cannot parse VMX files if they contain a Byte Order Mark (BOM).
+                        # We must explicitly define UTF-8 encoding with the BOM disabled ($false).
+                        [System.IO.File]::WriteAllLines($file.FullName, $currentContent, [System.Text.UTF8Encoding]::new($false))
+
+                        Write-Log "OK" "Updated"
+                        $stats.Optimized++
+                    } else {
+                        Write-Log "INFO" "Skipped (WhatIf)"
+                        $stats.Skipped++
                     }
-
-                    if (-not $NoBackup) { Copy-Item $file.FullName ($file.FullName + ".bak") -Force }
-
-                    # VMware cannot parse VMX files if they contain a Byte Order Mark (BOM).
-                    # We must explicitly define UTF-8 encoding with the BOM disabled ($false).
-                    [System.IO.File]::WriteAllLines($file.FullName, $currentContent, [System.Text.UTF8Encoding]::new($false))
-
-                    Write-Log "OK" "Updated"
-                    $stats.Optimized++
                 } else {
                     Write-Log "INFO" "Skipped"
+                    $stats.Skipped++
                 }
             }
         } Catch {
