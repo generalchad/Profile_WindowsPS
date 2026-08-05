@@ -10,12 +10,13 @@
 RootModule = 'Optimize-VMX.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.0'
+ModuleVersion = '1.1.0'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Desktop', 'Core')
 
 # ID used to uniquely identify this module
+
 GUID = '41c6ab0b-8f28-44d0-ada6-f69c0d4d84d1'
 
 # Author of this module
@@ -49,6 +50,8 @@ AliasesToExport = @()
 FileList = @(
     'Optimize-VMX.psd1'
     'Optimize-VMX.psm1'
+    'Private\Set-VMXSetting.ps1'
+    'Private\Write-Log.ps1'
     'Public\Optimize-VMX.ps1'
 )
 
@@ -65,7 +68,7 @@ PrivateData = @{
 
         # ReleaseNotes of this module
         ReleaseNotes = @'
-1.0.0
+1.1.0
   - Converted from standalone Functions\Optimize-VMX.ps1 script into a
     Public\/Private\ module layout matching the other modules here.
   - Added SupportsShouldProcess / -WhatIf / -Confirm support around the

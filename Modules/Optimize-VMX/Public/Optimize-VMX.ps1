@@ -20,13 +20,17 @@ function Optimize-VMX {
 
     .PARAMETER AutoApprove
         Bypasses the interactive prompt and automatically applies all recommended changes.
+
+    .PARAMETER ClearScreen
+        Clears the host screen before running.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param (
         [string]$Path = "D:\Virtual Machines",
         [switch]$Recurse,
         [switch]$NoBackup,
-        [switch]$AutoApprove
+        [switch]$AutoApprove,
+        [switch]$ClearScreen
     )
 
     $LogWidth = 85
@@ -41,38 +45,16 @@ function Optimize-VMX {
         "winnt|win31|win95|win98|winme"                                                 = "vlance"
     }
 
-    # Modern hardware versions (10+) break mouse/keyboard or cause boot loops on Win9x/Vista
-    $HardwarePinning = @{ "winvista" = "12"; "win95|win98" = "8" }
+    # Modern hardware versions (10+) break mouse/keyboard or cause boot loops on Win9x/Vista.
+    # Ordered dictionary is used here for the same reason as $AdapterRules: the loop below stops
+    # after the first match, so enumeration order must be deterministic.
+    $HardwarePinning = [ordered]@{ "winvista" = "12"; "win95|win98" = "8" }
 
-    function Write-Log {
-        param([string]$Level, [string]$Message, [string]$Detail = "")
-        $colors = @{ "INFO"="Gray"; "WARN"="Yellow"; "ERR"="Red"; "ACTION"="Cyan"; "OK"="DarkGray" }
-        Write-Host ("$(Get-Date -Format 'HH:mm:ss') [$($Level.PadRight(4).Substring(0,4))] ") -NoNewline -ForegroundColor $colors[$Level]
-        Write-Host $Message -NoNewline -ForegroundColor $colors[$Level]
-        if ($Detail) { Write-Host " : $Detail" -ForegroundColor DarkGray } else { Write-Host "" }
-    }
+    # Local mutable flag for "apply all remaining changes without prompting". Kept separate
+    # from the -AutoApprove switch parameter so we never mutate a bound parameter value.
+    $autoApproveAll = $AutoApprove.IsPresent
 
-    function Set-VMXSetting {
-        param ($ContentLines, $Key, $Value)
-        $escapedKey = [regex]::Escape($Key)
-        $found = $false
-        $newLines = @()
-
-        foreach ($line in $ContentLines) {
-            # Matches exact key regardless of whitespace padding around the equals sign
-            if ($line -match "^\s*$escapedKey\s*=") {
-                $newLines += "$Key = `"$Value`""
-                $found = $true
-            } else {
-                $newLines += $line
-            }
-        }
-
-        if (-not $found) { $newLines += "$Key = `"$Value`"" }
-        return ,$newLines
-    }
-
-    Clear-Host
+    if ($ClearScreen) { Clear-Host }
     Write-Host ("=" * $LogWidth) -ForegroundColor Cyan
     Write-Host " VMWARE CONFIGURATION OPTIMIZER" -ForegroundColor White
     Write-Host ("=" * $LogWidth) -ForegroundColor Cyan
@@ -84,7 +66,13 @@ function Optimize-VMX {
     $zombies = Get-Process vmware-vmx -ErrorAction SilentlyContinue
     if ($zombies) {
         Write-Log "WARN" "Active 'vmware-vmx' processes found. Close VMware Workstation/Player."
-        $k = Read-Host "    > Kill processes? [Y/N]"
+
+        if ($autoApproveAll) {
+            $k = 'Y'
+        } else {
+            $k = Read-Host "    > Kill processes? [Y/N]"
+        }
+
         if ($k -eq 'Y') {
             Stop-Process -Name vmware-vmx -Force
 
@@ -116,14 +104,14 @@ function Optimize-VMX {
         $stats.Scanned++
 
         # .lck files indicate the VM is currently powered on or suspended.
-        if (Test-Path ($file.FullName + ".lck") -or Test-Path ($file.FullName + ".lck\*")) {
+        if ((Test-Path ($file.FullName + ".lck")) -or (Test-Path ($file.FullName + ".lck\*"))) {
             Write-Log "WARN" "Skipping Locked VM (Running?)" $vmName
             $stats.Skipped++; continue
         }
 
         Try {
             $rawContent = Get-Content $file.FullName -Raw
-            $currentContent = Get-Content $file.FullName
+            $currentContent = $rawContent -split '\r?\n'
 
             $guestOS = if ($rawContent -match 'guestOS\s*=\s*"([^"]+)"') { $matches[1] } else { "Unknown" }
             $pendingChanges = @()
@@ -182,13 +170,20 @@ function Optimize-VMX {
                     }
                 }
 
+                # ShouldProcess is the single source of truth for -WhatIf/-Confirm handling. It
+                # returns $false automatically under -WhatIf, so we don't need (and must not
+                # duplicate) a manual $WhatIfPreference check here - doing so previously caused
+                # -Confirm to trigger two separate prompts for the same action.
                 $choice = "Y"
-                if (-not $AutoApprove) {
+                if (-not $autoApproveAll -and -not $WhatIfPreference) {
                     $choice = Read-Host "    Apply? [Y]es, [N]o (Skip), [A]ll, [Q]uit"
                 }
 
-                if ($choice -match '^[Qq]') { break }
-                if ($choice -match '^[Aa]') { $AutoApprove = $true; $choice = 'Y' }
+                if ($choice -match '^[Qq]') {
+                    Write-Log "WARN" "Aborted by user"
+                    break
+                }
+                if ($choice -match '^[Aa]') { $autoApproveAll = $true; $choice = 'Y' }
 
                 if ($choice -match '^[Yy]') {
                     if ($PSCmdlet.ShouldProcess($file.FullName, "Apply $($pendingChanges.Count) VMX setting change(s)")) {
