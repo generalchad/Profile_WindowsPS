@@ -27,8 +27,12 @@
 Functions/logs/
 
 # 6. Specific Module Whitelist
+!Modules/Compress-Video/
+!Modules/Compress-Video/**
 !Modules/Optimize-PSX/
-!Modules/Optimize-PSX/**
+!Modules/Optimize-PSX/*
+!Modules/Optimize-VMX/
+!Modules/Optimize-VMX/**
 !Modules/Rename-MediaFile/
 !Modules/Rename-MediaFile/**
 !Modules/Restart-NetworkStack/

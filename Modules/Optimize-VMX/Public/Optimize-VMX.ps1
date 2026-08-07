@@ -20,12 +20,17 @@ function Optimize-VMX {
 
     .PARAMETER AutoApprove
         Bypasses the interactive prompt and automatically applies all recommended changes.
+
+    .PARAMETER ClearScreen
+        Clears the host screen before running.
     #>
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         [string]$Path = "D:\Virtual Machines",
         [switch]$Recurse,
         [switch]$NoBackup,
-        [switch]$AutoApprove
+        [switch]$AutoApprove,
+        [switch]$ClearScreen
     )
 
     $LogWidth = 85
@@ -40,38 +45,16 @@ function Optimize-VMX {
         "winnt|win31|win95|win98|winme"                                                 = "vlance"
     }
 
-    # Modern hardware versions (10+) break mouse/keyboard or cause boot loops on Win9x/Vista
-    $HardwarePinning = @{ "winvista" = "12"; "win95|win98" = "8" }
+    # Modern hardware versions (10+) break mouse/keyboard or cause boot loops on Win9x/Vista.
+    # Ordered dictionary is used here for the same reason as $AdapterRules: the loop below stops
+    # after the first match, so enumeration order must be deterministic.
+    $HardwarePinning = [ordered]@{ "winvista" = "12"; "win95|win98" = "8" }
 
-    function Write-Log {
-        param([string]$Level, [string]$Message, [string]$Detail = "")
-        $colors = @{ "INFO"="Gray"; "WARN"="Yellow"; "ERR"="Red"; "ACTION"="Cyan"; "OK"="DarkGray" }
-        Write-Host ("$(Get-Date -Format 'HH:mm:ss') [$($Level.PadRight(4).Substring(0,4))] ") -NoNewline -ForegroundColor $colors[$Level]
-        Write-Host $Message -NoNewline -ForegroundColor $colors[$Level]
-        if ($Detail) { Write-Host " : $Detail" -ForegroundColor DarkGray } else { Write-Host "" }
-    }
+    # Local mutable flag for "apply all remaining changes without prompting". Kept separate
+    # from the -AutoApprove switch parameter so we never mutate a bound parameter value.
+    $autoApproveAll = $AutoApprove.IsPresent
 
-    function Set-VMXSetting {
-        param ($ContentLines, $Key, $Value)
-        $escapedKey = [regex]::Escape($Key)
-        $found = $false
-        $newLines = @()
-
-        foreach ($line in $ContentLines) {
-            # Matches exact key regardless of whitespace padding around the equals sign
-            if ($line -match "^\s*$escapedKey\s*=") {
-                $newLines += "$Key = `"$Value`""
-                $found = $true
-            } else {
-                $newLines += $line
-            }
-        }
-
-        if (-not $found) { $newLines += "$Key = `"$Value`"" }
-        return ,$newLines
-    }
-
-    Clear-Host
+    if ($ClearScreen) { Clear-Host }
     Write-Host ("=" * $LogWidth) -ForegroundColor Cyan
     Write-Host " VMWARE CONFIGURATION OPTIMIZER" -ForegroundColor White
     Write-Host ("=" * $LogWidth) -ForegroundColor Cyan
@@ -83,26 +66,52 @@ function Optimize-VMX {
     $zombies = Get-Process vmware-vmx -ErrorAction SilentlyContinue
     if ($zombies) {
         Write-Log "WARN" "Active 'vmware-vmx' processes found. Close VMware Workstation/Player."
-        $k = Read-Host "    > Kill processes? [Y/N]"
-        if ($k -eq 'Y') { Stop-Process -Name vmware-vmx -Force; Start-Sleep 1 } else { return }
+
+        if ($autoApproveAll) {
+            $k = 'Y'
+        } else {
+            $k = Read-Host "    > Kill processes? [Y/N]"
+        }
+
+        if ($k -eq 'Y') {
+            Stop-Process -Name vmware-vmx -Force
+
+            # Give VMware a chance to fully release file locks before we proceed. Poll
+            # rather than a flat sleep, since a fixed 1s wait can be too short under load
+            # (many running VMs) and unnecessarily long when the process exits instantly.
+            $waited = 0
+            $pollIntervalMs = 250
+            $maxWaitMs = 5000
+            while ((Get-Process vmware-vmx -ErrorAction SilentlyContinue) -and ($waited -lt $maxWaitMs)) {
+                Start-Sleep -Milliseconds $pollIntervalMs
+                $waited += $pollIntervalMs
+            }
+            if (Get-Process vmware-vmx -ErrorAction SilentlyContinue) {
+                Write-Log "WARN" "vmware-vmx still running after ${maxWaitMs}ms wait" "Proceeding anyway"
+            }
+        } else { return }
     }
 
     $vmxFiles = Get-ChildItem -Path $Path -Filter "*.vmx" -Recurse:$Recurse
     $stats = @{ Scanned=0; Optimized=0; Failed=0; Skipped=0 }
+
+    if ($vmxFiles.Count -eq 0) {
+        Write-Log "WARN" "No .vmx files found" $Path
+    }
 
     foreach ($file in $vmxFiles) {
         $vmName = $file.BaseName
         $stats.Scanned++
 
         # .lck files indicate the VM is currently powered on or suspended.
-        if (Test-Path ($file.FullName + ".lck") -or Test-Path ($file.FullName + ".lck\*")) {
+        if ((Test-Path ($file.FullName + ".lck")) -or (Test-Path ($file.FullName + ".lck\*"))) {
             Write-Log "WARN" "Skipping Locked VM (Running?)" $vmName
             $stats.Skipped++; continue
         }
 
         Try {
             $rawContent = Get-Content $file.FullName -Raw
-            $currentContent = Get-Content $file.FullName
+            $currentContent = $rawContent -split '\r?\n'
 
             $guestOS = if ($rawContent -match 'guestOS\s*=\s*"([^"]+)"') { $matches[1] } else { "Unknown" }
             $pendingChanges = @()
@@ -118,7 +127,10 @@ function Optimize-VMX {
             $adapters = [regex]::Matches($rawContent, 'ethernet(\d+)\.') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
             foreach ($idx in $adapters) {
                 $key = "ethernet$idx.virtualDev"
-                if (-not ($rawContent -match [regex]::Escape($key) + "\s*=\s*`"$recNet`"")) {
+                # Anchored to line start/end (multiline) so this can never ambiguously match
+                # a different adapter's line (e.g. ethernet1 vs ethernet10).
+                $currentValuePattern = "(?m)^\s*" + [regex]::Escape($key) + "\s*=\s*`"$recNet`"\s*$"
+                if (-not ($rawContent -match $currentValuePattern)) {
                     $pendingChanges += [PSCustomObject]@{ Property = $key; NewValue = $recNet }
                 }
             }
@@ -132,6 +144,11 @@ function Optimize-VMX {
                         # Disabling auto-upgrade prevents VMware from overwriting our pinned hardware version later
                         $pendingChanges += [PSCustomObject]@{ Property = "tools.upgrade.policy"; NewValue = "manual" }
                     }
+
+                    # Only one hardware-pinning rule should ever apply to a given guestOS. Stopping
+                    # here prevents conflicting/duplicate virtualHW.version changes if the rule table
+                    # is ever extended with overlapping patterns.
+                    break
                 }
             }
 
@@ -153,29 +170,42 @@ function Optimize-VMX {
                     }
                 }
 
+                # ShouldProcess is the single source of truth for -WhatIf/-Confirm handling. It
+                # returns $false automatically under -WhatIf, so we don't need (and must not
+                # duplicate) a manual $WhatIfPreference check here - doing so previously caused
+                # -Confirm to trigger two separate prompts for the same action.
                 $choice = "Y"
-                if (-not $AutoApprove) {
+                if (-not $autoApproveAll -and -not $WhatIfPreference) {
                     $choice = Read-Host "    Apply? [Y]es, [N]o (Skip), [A]ll, [Q]uit"
                 }
 
-                if ($choice -match '^[Qq]') { break }
-                if ($choice -match '^[Aa]') { $AutoApprove = $true; $choice = 'Y' }
+                if ($choice -match '^[Qq]') {
+                    Write-Log "WARN" "Aborted by user"
+                    break
+                }
+                if ($choice -match '^[Aa]') { $autoApproveAll = $true; $choice = 'Y' }
 
                 if ($choice -match '^[Yy]') {
-                    foreach ($change in $pendingChanges) {
-                        $currentContent = Set-VMXSetting -ContentLines $currentContent -Key $change.Property -Value $change.NewValue
+                    if ($PSCmdlet.ShouldProcess($file.FullName, "Apply $($pendingChanges.Count) VMX setting change(s)")) {
+                        foreach ($change in $pendingChanges) {
+                            $currentContent = Set-VMXSetting -ContentLines $currentContent -Key $change.Property -Value $change.NewValue
+                        }
+
+                        if (-not $NoBackup) { Copy-Item $file.FullName ($file.FullName + ".bak") -Force }
+
+                        # VMware cannot parse VMX files if they contain a Byte Order Mark (BOM).
+                        # We must explicitly define UTF-8 encoding with the BOM disabled ($false).
+                        [System.IO.File]::WriteAllLines($file.FullName, $currentContent, [System.Text.UTF8Encoding]::new($false))
+
+                        Write-Log "OK" "Updated"
+                        $stats.Optimized++
+                    } else {
+                        Write-Log "INFO" "Skipped (WhatIf)"
+                        $stats.Skipped++
                     }
-
-                    if (-not $NoBackup) { Copy-Item $file.FullName ($file.FullName + ".bak") -Force }
-
-                    # VMware cannot parse VMX files if they contain a Byte Order Mark (BOM).
-                    # We must explicitly define UTF-8 encoding with the BOM disabled ($false).
-                    [System.IO.File]::WriteAllLines($file.FullName, $currentContent, [System.Text.UTF8Encoding]::new($false))
-
-                    Write-Log "OK" "Updated"
-                    $stats.Optimized++
                 } else {
                     Write-Log "INFO" "Skipped"
+                    $stats.Skipped++
                 }
             }
         } Catch {
