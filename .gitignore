@@ -33,6 +33,8 @@ Functions/logs/
 !Modules/Rename-MediaFile/**
 !Modules/Restart-NetworkStack/
 !Modules/Restart-NetworkStack/**
+!Modules/Restart-PrintStack/
+!Modules/Restart-PrintStack/**
 !Modules/Test-FileShare/
 !Modules/Test-FileShare/**
 !Modules/Test-SmtpRelay/
