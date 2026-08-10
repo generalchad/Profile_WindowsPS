@@ -51,7 +51,8 @@ function Rename-MediaFile {
     .PARAMETER PermanentDelete
         Delete junk outright instead of sending it to the Recycle Bin.
     .PARAMETER NoPager
-        Print the whole preview at once instead of paging it.
+        Force console output mode instead of Out-GridView. When in console mode, also disables
+        pagination if the output fits on screen. Useful for automation, scripting, or SSH sessions.
     .PARAMETER Force
         Apply every change without confirmation.
     .PARAMETER PassThru
@@ -477,13 +478,37 @@ function Rename-MediaFile {
             }
         }
 
-        # --- Remove folders emptied by subtitle flattening ---
+        # --- Remove folders emptied by subtitle flattening or junk deletion ---
         if (-not $NoFlattenSubtitleFolders -and -not $SkipSubtitles) {
             $EmptiedDirs = @($Audit | Where-Object { $_.Type -eq 'Subtitle' -and $_.Status -eq 'Success' } |
                              ForEach-Object { Split-Path -Path $_.OldPath -Parent } |
                              Sort-Object -Unique)
 
             foreach ($Candidate in $EmptiedDirs) {
+                if (-not (Test-Path -LiteralPath $Candidate)) { continue }
+
+                $Leaf = Split-Path -Path $Candidate -Leaf
+                if ($script:SubtitleFolderNames -notcontains $Leaf.ToLower()) { continue }
+                if (@(Get-ChildItem -LiteralPath $Candidate -Force -ErrorAction SilentlyContinue).Count -gt 0) { continue }
+
+                if ($PSCmdlet.ShouldProcess($Candidate, 'Remove now-empty subtitle folder')) {
+                    try {
+                        Remove-Item -LiteralPath $Candidate -Force -ErrorAction Stop
+                        Write-Host "[CLEANED] Removed empty folder: $Leaf" -ForegroundColor DarkGray
+                    } catch {
+                        Write-Verbose "Could not remove empty folder '$Candidate': $_"
+                    }
+                }
+            }
+        }
+
+        # --- Also check directories that had junk files deleted ---
+        if ($RemoveJunkFiles) {
+            $JunkDirs = @($Audit | Where-Object { $_.Type -eq 'Delete' -and $_.Status -eq 'Deleted' } |
+                          ForEach-Object { Split-Path -Path $_.OldPath -Parent } |
+                          Sort-Object -Unique)
+
+            foreach ($Candidate in $JunkDirs) {
                 if (-not (Test-Path -LiteralPath $Candidate)) { continue }
 
                 $Leaf = Split-Path -Path $Candidate -Leaf
