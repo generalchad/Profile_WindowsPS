@@ -68,18 +68,18 @@ function Stop-ProcessByName {
             }
 
             if ($processes) {
-                $processInfo = $processes | Select-Object ProcessName, Id, Path, StartTime 
+                $processInfo = $processes | Select-Object ProcessName, Id, Path, StartTime
 
                 # 2. Use ShouldProcess for safety
                 if ($PSCmdlet.ShouldProcess("Processes matching '$item'", "Stop")) {
                     Write-Host "Attempting to stop processes matching '$item'..." -ForegroundColor Cyan
-                    
+
                     Write-Output $processInfo | Format-Table -AutoSize | Out-String | Write-Host
 
                     try {
                         $processes | Stop-Process -ErrorAction Stop
                         Write-Host "SUCCESS: Processes matching '$item' were stopped." -ForegroundColor Green
-                    } 
+                    }
                     catch {
                         Write-Host "FAILED to stop one or more processes matching '$item': $($_.Exception.Message)" -ForegroundColor Red
                     }
@@ -198,4 +198,57 @@ function Update-PowerShell {
             Write-Host "PowerShell has been updated to version $LatestVersion" -ForegroundColor Green
         }
     }
+}
+
+# --- Cache Refresh Utilities (Added for Performance Optimization) ---
+function Update-OhMyPoshCache {
+    <#
+    .SYNOPSIS
+        Manually regenerates the Oh-My-Posh cache file.
+    .DESCRIPTION
+        Forces regeneration of the Oh-My-Posh initialization cache.
+        Use this after updating Oh-My-Posh or changing themes.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
+    $OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
+
+    if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
+        Write-Warning "Oh-My-Posh is not installed or not in PATH."
+        return
+    }
+
+    if (-not (Test-Path $OmpTheme)) {
+        Write-Warning "Theme file not found: $OmpTheme"
+        return
+    }
+
+    Write-Host "Regenerating Oh-My-Posh cache..." -ForegroundColor Cyan
+    oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8 -Force
+    Write-Host "Oh-My-Posh cache regenerated successfully." -ForegroundColor Green
+}
+
+function Update-ZoxideCache {
+    <#
+    .SYNOPSIS
+        Manually regenerates the Zoxide cache file.
+    .DESCRIPTION
+        Forces regeneration of the Zoxide initialization cache.
+        Use this after updating Zoxide.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
+
+    if (-not (Get-Command zoxide -ErrorAction SilentlyContinue)) {
+        Write-Warning "Zoxide is not installed or not in PATH."
+        return
+    }
+
+    Write-Host "Regenerating Zoxide cache..." -ForegroundColor Cyan
+    zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
+    Write-Host "Zoxide cache regenerated successfully." -ForegroundColor Green
 }
