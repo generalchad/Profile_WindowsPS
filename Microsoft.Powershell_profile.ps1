@@ -49,21 +49,17 @@ if (Test-Path $AliasFile) {
 }
 
 # 4. Initialization (Zoxide, Oh-My-Posh, Icons)
-# Terminal-Icons alters directory formatting, so it requires an explicit import
-try { Import-Module Terminal-Icons -ErrorAction SilentlyContinue } catch {}
+# Terminal-Icons removed for performance - Import manually if needed:
+# Import-Module Terminal-Icons
 
-# Oh-My-Posh (Cached with Executable & Theme Validation)
+# Oh-My-Posh (Optimized Caching - Only regenerate if cache missing)
 $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
 $OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
 $OmpExe   = (Get-Command oh-my-posh -ErrorAction SilentlyContinue).Source
 
 if ($OmpExe -and (Test-Path $OmpTheme)) {
-    $CacheTime = if (Test-Path $OmpCache) { (Get-Item $OmpCache).LastWriteTime } else { [DateTime]::MinValue }
-    $ThemeTime = (Get-Item $OmpTheme).LastWriteTime
-    $ExeTime   = (Get-Item $OmpExe).LastWriteTime
-
-    # Regenerate if cache is missing, theme changed, or oh-my-posh binary was updated
-    if ($ThemeTime -gt $CacheTime -or $ExeTime -gt $CacheTime) {
+    # Only regenerate if cache doesn't exist (eliminates 3 Get-Item calls on normal loads)
+    if (-not (Test-Path $OmpCache)) {
         oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8 -Force
     }
 
@@ -71,23 +67,20 @@ if ($OmpExe -and (Test-Path $OmpTheme)) {
         try {
             . $OmpCache
         } catch {
-            # Self-healing: If cached script fails (e.g. broken runtime paths after update), purge and regenerate instantly
-            Remove-Item $OmpCache -Force -ErrorAction SilentlyContinue
+            # Self-healing: regenerate on error
             oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8 -Force
             . $OmpCache
         }
     }
 }
 
-# Zoxide (Cached with Executable Validation)
+# Zoxide (Optimized Caching - Only regenerate if cache missing)
 $ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
 $ZoxideExe   = (Get-Command zoxide -ErrorAction SilentlyContinue).Source
 
 if ($ZoxideExe) {
-    $CacheTime = if (Test-Path $ZoxideCache) { (Get-Item $ZoxideCache).LastWriteTime } else { [DateTime]::MinValue }
-    $ExeTime   = (Get-Item $ZoxideExe).LastWriteTime
-
-    if ($ExeTime -gt $CacheTime) {
+    # Only regenerate if cache doesn't exist (eliminates 2 Get-Item calls on normal loads)
+    if (-not (Test-Path $ZoxideCache)) {
         zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
     }
 
@@ -95,7 +88,7 @@ if ($ZoxideExe) {
         try {
             . $ZoxideCache
         } catch {
-            Remove-Item $ZoxideCache -Force -ErrorAction SilentlyContinue
+            # Self-healing: regenerate on error
             zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
             . $ZoxideCache
         }
