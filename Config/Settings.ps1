@@ -3,9 +3,8 @@
 # -----------------------------------------------------------------------------
 
 # --- PSFeedbackProvider ---
-if (-not (Get-ExperimentalFeature -Name PSFeedbackProvider -ErrorAction SilentlyContinue)) {
-    Enable-ExperimentalFeature PSFeedbackProvider -ErrorAction SilentlyContinue 3>$null
-}
+# Removed for performance - Enable experimental features manually with:
+# Enable-ExperimentalFeature PSFeedbackProvider
 
 # --- PSReadLine & Colors ---
 $PSReadLineOptions = @{
@@ -32,10 +31,14 @@ Set-PSReadLineOption -AddToHistoryHandler {
 # --- Editor Config ---
 if (-not $env:EDITOR) {
     $editorPriority = 'nvim', 'vim', 'vi', 'code', 'notepad++'
-    $foundEditor = ($editorPriority | ForEach-Object {
-        Get-Command $_ -ErrorAction SilentlyContinue
-    } | Select-Object -First 1).Name
-
+    $foundEditor = $null
+    # Use early exit loop instead of pipeline for better performance
+    foreach ($editor in $editorPriority) {
+        if (Get-Command $editor -ErrorAction SilentlyContinue) {
+            $foundEditor = $editor
+            break  # Exit immediately after finding first match
+        }
+    }
     # Persist for future sessions to save startup time
     $env:EDITOR = if ($foundEditor) { $foundEditor } else { 'notepad' }
     [System.Environment]::SetEnvironmentVariable('EDITOR', $env:EDITOR, 'User')
