@@ -26,19 +26,27 @@ if (-not [string]::IsNullOrEmpty($env:EDITOR)) {
     ("vim", "vi") | ForEach-Object { Set-Alias -Name $_ -Value $env:EDITOR -Force }
 }
 
-# 2. VS Code Logic
-$InsidersFile = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
-$StableFile   = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+# 2. VS Code Logic - Optimized to check PATH first (faster than file system)
+$codeInsiders = Get-Command code-insiders -ErrorAction SilentlyContinue
+$codeStable = Get-Command code -ErrorAction SilentlyContinue
 
-if (Test-Path $InsidersFile) {
-    # If Insiders exists, force BOTH aliases to point directly to its file
-    Set-Alias -Name code -Value $InsidersFile -Force
-    Set-Alias -Name code-insiders -Value $InsidersFile -Force
-} elseif (Test-Path $StableFile) {
-    # If only Stable exists, fallback
-    Set-Alias -Name code -Value $StableFile -Force
+if ($codeInsiders) {
+    Set-Alias -Name code -Value code-insiders -Force
+    Set-Alias -Name code-insiders -Value code-insiders -Force
+} elseif ($codeStable) {
+    Set-Alias -Name code -Value code -Force
 } else {
-    Write-Warning "Neither VS Code Insiders nor Stable executable was found."
+    # Fallback to file path checking only if not in PATH
+    $InsidersFile = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
+    $StableFile   = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+
+    if (Test-Path $InsidersFile) {
+        Set-Alias -Name code -Value $InsidersFile -Force
+        Set-Alias -Name code-insiders -Value $InsidersFile -Force
+    } elseif (Test-Path $StableFile) {
+        Set-Alias -Name code -Value $StableFile -Force
+    }
+    # Warning removed for performance - not critical for profile loading
 }
 
 # --- Filesystem ---
