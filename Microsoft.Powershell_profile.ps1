@@ -1,13 +1,16 @@
 # -----------------------------------------------------------------------------
 # Microsoft.PowerShell_profile.ps1 - The Optimized Loader
 # -----------------------------------------------------------------------------
-$ProfileRoot = Split-Path $PROFILE
+$ProfileRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($PROFILE) { Split-Path -Parent $PROFILE } else { $PSScriptRoot }
+if (-not $ProfileRoot) { $ProfileRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
 
 # 1. Load Settings (Theme, Editor, PSReadline)
 $ConfigPath = Join-Path $ProfileRoot "Config"
 if (Test-Path $ConfigPath) {
     # Using high-performance .NET file enumeration to skip Get-ChildItem object overhead
+    # Excluding Aliases.ps1 so it can be loaded last in Step 3
     foreach ($File in [System.IO.Directory]::GetFiles($ConfigPath, "*.ps1")) {
+        if ([System.IO.Path]::GetFileName($File) -eq "Aliases.ps1") { continue }
         try {
             . $File
         } catch {

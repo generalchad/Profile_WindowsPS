@@ -19,7 +19,17 @@ $PSReadLineOptions = @{
     HistoryNoDuplicates = $true
     MaximumHistoryCount = 10000
 }
-Set-PSReadLineOption @PSReadLineOptions
+# Only pass supported parameters to avoid errors on older PSReadLine versions
+$supportedParams = (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue).Parameters
+if ($supportedParams) {
+    $filteredOptions = @{}
+    foreach ($key in $PSReadLineOptions.Keys) {
+        if ($supportedParams.ContainsKey($key)) {
+            $filteredOptions[$key] = $PSReadLineOptions[$key]
+        }
+    }
+    Set-PSReadLineOption @filteredOptions
+}
 
 # --- History Handler (Secrets) ---
 Set-PSReadLineOption -AddToHistoryHandler {
@@ -29,20 +39,24 @@ Set-PSReadLineOption -AddToHistoryHandler {
 }
 
 # --- Editor Config ---
-if (-not $env:EDITOR) {
-    $editorPriority = 'nvim', 'vim', 'vi', 'code', 'notepad++'
-    $foundEditor = $null
-    # Use early exit loop instead of pipeline for better performance
-    foreach ($editor in $editorPriority) {
-        if (Get-Command $editor -ErrorAction SilentlyContinue) {
-            $foundEditor = $editor
-            break  # Exit immediately after finding first match
-        }
+$editorPriority = 'nvim', 'vim', 'vi', 'code-insiders.cmd', 'code-insiders', 'code.cmd', 'code', 'notepad++'
+$script:foundEditor = $null
+foreach ($editor in $editorPriority) {
+    $cmd = Get-Command $editor -CommandType Application -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $script:foundEditor = $cmd.Name
+        break
     }
-    # Persist for future sessions to save startup time
-    $env:EDITOR = if ($foundEditor) { $foundEditor } else { 'notepad' }
-    [System.Environment]::SetEnvironmentVariable('EDITOR', $env:EDITOR, 'User')
 }
+if (-not $script:foundEditor) {
+    if (Test-Path "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd") {
+        $script:foundEditor = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
+    } elseif (Test-Path "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd") {
+        $script:foundEditor = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+    }
+}
+$env:EDITOR = if ($script:foundEditor) { $script:foundEditor } else { 'notepad' }
+[System.Environment]::SetEnvironmentVariable('EDITOR', $env:EDITOR, 'User')
 
 # --- Argument Completers ---
 $completionCommands = @{

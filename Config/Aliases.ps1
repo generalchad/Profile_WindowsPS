@@ -5,8 +5,10 @@
 # --- Core System ---
 if (Get-Command ntop -ErrorAction SilentlyContinue) { Set-Alias -Name top -Value ntop }
 Set-Alias -Name ep  -Value Edit-Profile
-# Using -Force to overwrite the default 'sp' (Set-Property) alias
-Set-Alias -Name sp  -Value Sync-Profile -Force  # Source Profile
+# Attempting to override 'sp' (Set-Property) alias safely
+try { Set-Alias -Name sp -Value Sync-Profile -Force -ErrorAction Stop } catch {
+    function sp { Sync-Profile @args }
+}
 
 # Set-Alias for 'grep' and 'sed' only if they aren't already binaries in PATH
 if (-not (Get-Command grep -ErrorAction SilentlyContinue)) { Set-Alias -Name grep -Value Find-Text }
@@ -26,27 +28,25 @@ if (-not [string]::IsNullOrEmpty($env:EDITOR)) {
     ("vim", "vi") | ForEach-Object { Set-Alias -Name $_ -Value $env:EDITOR -Force }
 }
 
-# 2. VS Code Logic - Optimized to check PATH first (faster than file system)
-$codeInsiders = Get-Command code-insiders -ErrorAction SilentlyContinue
-$codeStable = Get-Command code -ErrorAction SilentlyContinue
+# 2. VS Code Logic - Optimized to check PATH and fallback to default install paths
+$insidersCmd = (Get-Command code-insiders.cmd, code-insiders -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
+$stableCmd   = (Get-Command code.cmd, code -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
 
-if ($codeInsiders) {
-    Set-Alias -Name code -Value code-insiders -Force
-    Set-Alias -Name code-insiders -Value code-insiders -Force
-} elseif ($codeStable) {
-    Set-Alias -Name code -Value code -Force
-} else {
-    # Fallback to file path checking only if not in PATH
-    $InsidersFile = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
-    $StableFile   = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+$insidersPath = if ($insidersCmd) { $insidersCmd.Source } else {
+    $p = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
+    if (Test-Path $p) { $p } else { $null }
+}
 
-    if (Test-Path $InsidersFile) {
-        Set-Alias -Name code -Value $InsidersFile -Force
-        Set-Alias -Name code-insiders -Value $InsidersFile -Force
-    } elseif (Test-Path $StableFile) {
-        Set-Alias -Name code -Value $StableFile -Force
-    }
-    # Warning removed for performance - not critical for profile loading
+$stablePath = if ($stableCmd) { $stableCmd.Source } else {
+    $p = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+    if (Test-Path $p) { $p } else { $null }
+}
+
+if ($insidersPath -and -not $stablePath) {
+    # If only Insiders is installed, alias 'code' to Insiders
+    Set-Alias -Name code -Value $insidersPath -Force
+} elseif ($stablePath) {
+    Set-Alias -Name code -Value $stablePath -Force
 }
 
 # --- Filesystem ---
@@ -95,8 +95,14 @@ function flushdns { Clear-DnsClientCache }
 function Get-PublicIP { (Invoke-WebRequest http://ifconfig.me/ip).Content }
 
 # --- Process Management ---
-# Using -Force to overwrite the default 'kill' (Stop-Process) alias
-("pkill", "kill", "stop") | ForEach-Object { Set-Alias -Name $_ -Value Stop-ProcessByName -Force }
+# Overwrite aliases where possible, fallback to wrapper function for AllScope aliases
+("pkill", "kill", "stop") | ForEach-Object {
+    try {
+        Set-Alias -Name $_ -Value Stop-ProcessByName -Force -ErrorAction Stop
+    } catch {
+        Set-Item -Path "Function:$_" -Value { param($param) Stop-ProcessByName @args } -Force -ErrorAction SilentlyContinue
+    }
+}
 function pgrep($name) { Get-Process $name }
 
 # --- System Info/Utils ---
