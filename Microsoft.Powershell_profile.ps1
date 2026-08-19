@@ -4,6 +4,34 @@
 $ProfileRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($PROFILE) { Split-Path -Parent $PROFILE } else { $PSScriptRoot }
 if (-not $ProfileRoot) { $ProfileRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
 
+# -----------------------------------------------------------------------------
+# 0. Optional load tracing.  Set $env:PROFILE_TRACE=1 before launching pwsh to
+#    emit a per-stage breakdown.  Costs nothing when the variable is unset.
+#      $env:PROFILE_TRACE=1; pwsh -NoLogo -Command exit
+#      Get-Content $env:TEMP\pwsh-profile-trace.log -Tail 20
+# -----------------------------------------------------------------------------
+$ProfileTrace = [bool]$env:PROFILE_TRACE
+if ($ProfileTrace) {
+    # State lives in a hashtable so Mark can mutate it by reference regardless of
+    # whether this profile is dot-sourced into global scope or re-sourced later.
+    $ProfileTraceState = @{
+        Sw    = [System.Diagnostics.Stopwatch]::StartNew()
+        Last  = 0.0
+        Marks = [System.Collections.Generic.List[object]]::new()
+    }
+    function Mark {
+        param([string]$Stage)
+        $s = $ProfileTraceState
+        $t = $s.Sw.Elapsed.TotalMilliseconds
+        $s.Marks.Add([pscustomobject]@{
+            Stage   = $Stage
+            Ms      = [math]::Round($t - $s.Last, 1)
+            TotalMs = [math]::Round($t, 1)
+        })
+        $s.Last = $t
+    }
+}
+
 # 1. Load Settings (Theme, Editor, PSReadline)
 $ConfigPath = Join-Path $ProfileRoot "Config"
 if (Test-Path $ConfigPath) {
@@ -18,6 +46,7 @@ if (Test-Path $ConfigPath) {
         }
     }
 }
+if ($ProfileTrace) { Mark 'Config' }
 
 # 2. Load Functions & Utilities (Loose Script Blocks)
 foreach ($Folder in "Functions", "Utilities") {
@@ -32,6 +61,7 @@ foreach ($Folder in "Functions", "Utilities") {
         }
     }
 }
+if ($ProfileTrace) { Mark 'Functions+Utilities' }
 
 # 2.5 Register Custom Modules (Leveraging Lazy-Loading Autoload)
 $LocalModulesPath = Join-Path $ProfileRoot "Modules"
@@ -44,12 +74,14 @@ if (Test-Path $LocalModulesPath) {
     # NOTE: Explicit 'Import-Module Rename-MediaFile' removed.
     # PowerShell will now auto-load it instantly on-demand the first time you invoke it.
 }
+if ($ProfileTrace) { Mark 'PSModulePath' }
 
 # 3. Load Aliases (Consolidated)
 $AliasFile = Join-Path $ConfigPath "Aliases.ps1"
 if (Test-Path $AliasFile) {
     try { . $AliasFile } catch { Write-Warning "Failed to load aliases: $_" }
 }
+if ($ProfileTrace) { Mark 'Aliases' }
 
 # 4. Initialization (Zoxide, Oh-My-Posh, Icons)
 # Terminal-Icons removed for performance - Import manually if needed:
@@ -76,6 +108,7 @@ if ($OmpExe -and (Test-Path $OmpTheme)) {
         }
     }
 }
+if ($ProfileTrace) { Mark 'oh-my-posh' }
 
 # Zoxide (Optimized Caching - Only regenerate if cache missing)
 $ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
@@ -96,6 +129,17 @@ if ($ZoxideExe) {
             . $ZoxideCache
         }
     }
+}
+if ($ProfileTrace) { Mark 'zoxide' }
+
+if ($ProfileTrace) {
+    $ProfileTraceState.Sw.Stop()
+    $total = [math]::Round($ProfileTraceState.Sw.Elapsed.TotalMilliseconds, 1)
+    $ProfileTraceState.Marks.Add([pscustomobject]@{ Stage = 'TOTAL'; Ms = $total; TotalMs = $total })
+    $report = $ProfileTraceState.Marks | Format-Table Stage, Ms, TotalMs -AutoSize | Out-String
+    $log = Join-Path $env:TEMP 'pwsh-profile-trace.log'
+    "[$(Get-Date -Format o)] pid=$PID host=$($Host.Name)$report" | Add-Content -LiteralPath $log -Encoding utf8
+    if (-not [Console]::IsOutputRedirected) { Write-Host $report -ForegroundColor DarkCyan }
 }
 
 Write-Host "Profile Loaded." -ForegroundColor DarkGray
