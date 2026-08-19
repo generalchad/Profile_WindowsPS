@@ -56,8 +56,9 @@ if (Test-Path $ConfigPath) {
 }
 if ($ProfileTrace) { Mark 'Config' }
 
-# 2. Functions & Utilities are now the ProfileTools module (Modules/ProfileTools),
-#    exported via its manifest so they autoload on first use. No eager dot-sourcing.
+# 2. Functions and utilities live in the ProfileTools module (Modules/ProfileTools).
+#    Its manifest declares the exported commands, so they autoload on first use
+#    instead of being dot-sourced eagerly at startup.
 
 # 2.5 Register Custom Modules (Leveraging Lazy-Loading Autoload)
 $LocalModulesPath = Join-Path $ProfileRoot "Modules"
@@ -67,8 +68,8 @@ if (Test-Path $LocalModulesPath) {
     if ($LocalModulesPath -notin $CurrentPaths) {
         $env:PSModulePath = "$LocalModulesPath$PathSeparator$env:PSModulePath"
     }
-    # NOTE: Explicit 'Import-Module Rename-MediaFile' removed.
-    # PowerShell will now auto-load it instantly on-demand the first time you invoke it.
+    # Modules are deliberately not imported here: each module's manifest declares
+    # its exported commands, so PowerShell autoloads it on first use at no startup cost.
 }
 if ($ProfileTrace) { Mark 'PSModulePath' }
 
@@ -79,9 +80,9 @@ if (Test-Path $AliasFile) {
 }
 if ($ProfileTrace) { Mark 'Aliases' }
 
-# 4. Initialization (Zoxide, Oh-My-Posh, Icons)
-# Terminal-Icons removed for performance - Import manually if needed:
-# Import-Module Terminal-Icons
+# 4. Initialization (Zoxide, Oh-My-Posh)
+# Terminal-Icons is intentionally not imported: it adds measurable startup cost
+# for icons that aren't essential. Opt in with `Import-Module Terminal-Icons`.
 
 # Oh-My-Posh (Optimized Caching - Only regenerate if cache missing)
 $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"

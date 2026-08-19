@@ -50,13 +50,13 @@ if ($insidersPath -and -not $stablePath) {
 }
 
 # --- Filesystem (shadow built-in mkdir/md) ---
+# md/mkdir are built-in aliases for New-Item, and aliases resolve before functions,
+# so they must be removed first for the re-alias below to take effect.
 ("mkcd", "mkdir", "md") | ForEach-Object {
     $aliasName = $_
-    # Remove existing alias if it exists
     if (Test-Path "Alias:$aliasName") {
         Remove-Item "Alias:$aliasName" -Force -ErrorAction SilentlyContinue
     }
-    # Set new alias (Shadows function if present)
     Set-Alias -Name $aliasName -Value New-Folder -Force
 }
 

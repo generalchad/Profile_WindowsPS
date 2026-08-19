@@ -3,8 +3,8 @@
 # -----------------------------------------------------------------------------
 
 # --- PSFeedbackProvider ---
-# Removed for performance - Enable experimental features manually with:
-# Enable-ExperimentalFeature PSFeedbackProvider
+# The PSFeedbackProvider experimental feature is intentionally left disabled.
+# Enable it explicitly if needed: Enable-ExperimentalFeature PSFeedbackProvider
 
 # --- PSReadLine & Colors ---
 $PSReadLineOptions = @{

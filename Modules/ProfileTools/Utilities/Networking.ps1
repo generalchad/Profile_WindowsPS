@@ -1,4 +1,8 @@
 function Test-NetSpeed {
+    <#
+    .SYNOPSIS
+        Runs librespeed-cli to measure network throughput.
+    #>
     if (Test-CommandExists librespeed-cli) {
         librespeed-cli $args[0]
     }
@@ -8,6 +12,10 @@ function Test-NetSpeed {
 }
 
 function Show-MyIP {
+    <#
+    .SYNOPSIS
+        Lists the machine's local IPv4 addresses, excluding loopback.
+    #>
     $interfaces = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | 
         Where-Object { $_.IPAddress -ne "127.0.0.1" }
     

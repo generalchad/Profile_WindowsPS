@@ -1,4 +1,14 @@
 function Get-WindowsInstallInfo {
+    <#
+    .SYNOPSIS
+        Reports Windows version, install date, drive space, RAM and CPU.
+    .DESCRIPTION
+        Reads the install date and current build from the registry, then gathers
+        drive, RAM and CPU details via CIM. Runs several CIM queries and is
+        therefore slow; avoid calling it from a hot path.
+    .EXAMPLE
+        Get-WindowsInstallInfo
+    #>
     [CmdletBinding()]
     param()
 

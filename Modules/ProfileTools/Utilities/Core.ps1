@@ -1,4 +1,8 @@
 function Test-CommandExists {
+    <#
+    .SYNOPSIS
+        Tests whether a command is resolvable in the current session.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -9,6 +13,13 @@ function Test-CommandExists {
 }
 
 function Test-GithubConnection {
+    <#
+    .SYNOPSIS
+        Returns $true when https://github.com responds within a one-second timeout.
+    .DESCRIPTION
+        Makes a lightweight network request to GitHub and suppresses the error on
+        failure, so callers can branch without a terminating exception.
+    #>
     [CmdletBinding()]
     param()
 
@@ -28,16 +39,31 @@ function Test-GithubConnection {
 }
 
 function Clear-Clipboard {
+    <#
+    .SYNOPSIS
+        Empties the Windows clipboard.
+    #>
     [CmdletBinding()]
     param()
     Set-Clipboard -Value $null
 }
 
 function Edit-Profile {
+    <#
+    .SYNOPSIS
+        Opens the current PowerShell profile in $env:EDITOR.
+    #>
     & $env:EDITOR $PROFILE
 }
 
 function Sync-Profile {
+    <#
+    .SYNOPSIS
+        Re-dot-sources the profile and reports how long it took.
+    .DESCRIPTION
+        Re-runs $PROFILE in the current session and prints the load time, so
+        edits can be applied without opening a new shell.
+    #>
     Write-Debug "Reloading PowerShell profile..."
     $startTime = Get-Date
     . $PROFILE
@@ -47,6 +73,18 @@ function Sync-Profile {
 }
 
 function Stop-ProcessByName {
+    <#
+    .SYNOPSIS
+        Stops one or more processes by name or PID, listing them first.
+    .DESCRIPTION
+        Resolves each argument as a numeric PID or a process name, prints the
+        matching processes, then stops them. Uses ShouldProcess so -WhatIf and
+        -Confirm are honored; a failed stop reports but does not throw.
+    .PARAMETER NameOrPid
+        Process names or numeric PIDs. Accepts pipeline input and remaining args.
+    .EXAMPLE
+        Stop-ProcessByName -NameOrPid code, 1234
+    #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory, ValueFromRemainingArguments, ValueFromPipeline)]
@@ -59,7 +97,6 @@ function Stop-ProcessByName {
 
     Process {
         foreach ($item in $NameOrPid) {
-            # 1. Get the processes based on name or PID
             if ($item -match '^\d+$') {
                 $processes = Get-Process -Id $item -ErrorAction SilentlyContinue
             }
@@ -70,7 +107,6 @@ function Stop-ProcessByName {
             if ($processes) {
                 $processInfo = $processes | Select-Object ProcessName, Id, Path, StartTime
 
-                # 2. Use ShouldProcess for safety
                 if ($PSCmdlet.ShouldProcess("Processes matching '$item'", "Stop")) {
                     Write-Host "Attempting to stop processes matching '$item'..." -ForegroundColor Cyan
 
@@ -93,6 +129,13 @@ function Stop-ProcessByName {
 }
 
 function Get-Uptime {
+    <#
+    .SYNOPSIS
+        Reports the last boot time and how long the system has been up.
+    .DESCRIPTION
+        Queries Win32_OperatingSystem via CIM, which is comparatively slow; avoid
+        calling this from a prompt hook or other hot path.
+    #>
     [CmdletBinding()]
     param()
 
@@ -106,6 +149,15 @@ function Get-Uptime {
 }
 
 function New-Hastebin {
+    <#
+    .SYNOPSIS
+        Uploads a file's contents to a hastebin service and returns the URL.
+    .DESCRIPTION
+        POSTs the file body to the paste service. Network failures are reported
+        as non-terminating errors rather than thrown.
+    .PARAMETER FilePath
+        Path to the file to upload. Accepts pipeline input.
+    #>
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory, ValueFromPipeline)]
@@ -132,6 +184,10 @@ function New-Hastebin {
 }
 
 function Invoke-PeriodicTable {
+    <#
+    .SYNOPSIS
+        Launches the periodic-table-cli if it is installed.
+    #>
     if (Test-CommandExists "periodic-table-cli") {
         periodic-table-cli
     }
@@ -142,6 +198,13 @@ function Invoke-PeriodicTable {
 
 # --- PowerShell Updates ---
 function Get-LatestPowerShellVersion {
+    <#
+    .SYNOPSIS
+        Returns the latest PowerShell release version from the GitHub API.
+    .DESCRIPTION
+        Queries the GitHub releases API and parses the latest tag. Returns $null
+        when GitHub is unreachable or the response cannot be parsed.
+    #>
     [CmdletBinding()]
     param()
 
@@ -164,6 +227,13 @@ function Get-LatestPowerShellVersion {
 }
 
 function Update-PowerShell {
+    <#
+    .SYNOPSIS
+        Compares the running PowerShell version to the latest release and, with
+        confirmation, upgrades it via winget.
+    .DESCRIPTION
+        Requires elevation to install. Prompts before running winget upgrade.
+    #>
     [CmdletBinding()]
     param()
 
@@ -192,7 +262,7 @@ function Update-PowerShell {
     }
 }
 
-# --- Cache Refresh Utilities (Added for Performance Optimization) ---
+# --- Prompt cache refresh helpers ---
 function Update-OhMyPoshCache {
     <#
     .SYNOPSIS

@@ -1,4 +1,10 @@
 function Find-File {
+    <#
+    .SYNOPSIS
+        Recursively finds files whose name contains a substring.
+    .PARAMETER Name
+        Substring to match against file names.
+    #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
@@ -10,6 +16,17 @@ function Find-File {
 }
 
 function Find-Text {
+    <#
+    .SYNOPSIS
+        Searches file contents (or pipeline input) for a regex.
+    .DESCRIPTION
+        When -Path is supplied, searches the given files; otherwise searches
+        piped input. Select-String returns the matching lines.
+    .PARAMETER Regex
+        Regular expression to match.
+    .PARAMETER Path
+        Files to search. Defaults to pipeline input when omitted.
+    #>
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
@@ -31,6 +48,16 @@ function Find-Text {
 }
 
 function New-File {
+    <#
+    .SYNOPSIS
+        Creates an empty file, optionally marking it Hidden and/or System.
+    .PARAMETER Path
+        File path. Defaults to ".\New file".
+    .PARAMETER Hidden
+        Set the Hidden attribute on the new file.
+    .PARAMETER System
+        Set the System attribute on the new file.
+    #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Position = 0, ValueFromPipeline)]
@@ -103,6 +130,18 @@ function Invoke-Explorer {
 }
 
 function New-Folder {
+    <#
+    .SYNOPSIS
+        Creates a directory, optionally marking it Hidden and/or System.
+    .DESCRIPTION
+        When invoked via the mkcd alias, also changes into the new directory.
+    .PARAMETER Path
+        Directory path. Defaults to ".\New folder".
+    .PARAMETER Hidden
+        Set the Hidden attribute on the new directory.
+    .PARAMETER System
+        Set the System attribute on the new directory.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Position = 0, ValueFromPipeline)]
@@ -137,6 +176,16 @@ function New-Folder {
 }
 
 function Extract-Archive {
+    <#
+    .SYNOPSIS
+        Expands an archive, creating the destination directory if needed.
+    .PARAMETER Path
+        Archive to expand.
+    .PARAMETER DestinationPath
+        Where to extract. Defaults to the current directory.
+    .PARAMETER Force
+        Passed through to Expand-Archive to overwrite existing files.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true, Position=0)]
@@ -164,6 +213,24 @@ function Extract-Archive {
 }
 
 function Replace-Text {
+    <#
+    .SYNOPSIS
+        Replaces regex matches in files or pipeline text, optionally in place.
+    .DESCRIPTION
+        With -Path, reads each file and either writes the result back (-InPlace,
+        gated by ShouldProcess) or streams the transformed lines to the pipeline.
+        Without -Path, transforms the piped input object.
+    .PARAMETER Pattern
+        Regular expression to match.
+    .PARAMETER Replacement
+        Replacement text.
+    .PARAMETER Path
+        Files to process. Accepts pipeline input by property name.
+    .PARAMETER InputObject
+        Text to transform when -Path is not used. Accepts pipeline input.
+    .PARAMETER InPlace
+        Write the result back to each file instead of streaming to the pipeline.
+    #>
     [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([string])]
     param(
