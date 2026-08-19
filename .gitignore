@@ -8,23 +8,19 @@
 
 # 2. Root Files to Track
 !.gitignore
+!CONTEXT.md
 !Microsoft.PowerShell_profile.ps1
 
 # 3. Directory Gates (Un-ignore folders so Git can step inside them)
 !Config/
-!Functions/
 !Modules/
 !Themes/
-!Utilities/
 
 # 4. Deep Content Whitelists (Track all nested files/subfolders)
 !Config/**
-!Functions/**
 !Themes/**
-!Utilities/**
 
 # 5. Whitelist Exceptions (Re-ignore specific subfolders and contents)
-Functions/logs/
 
 # 6. Specific Module Whitelist
 !Modules/Compress-Video/
@@ -33,6 +29,8 @@ Functions/logs/
 !Modules/Optimize-PSX/*
 !Modules/Optimize-VMX/
 !Modules/Optimize-VMX/**
+!Modules/ProfileTools/
+!Modules/ProfileTools/**
 !Modules/Rename-MediaFile/
 !Modules/Rename-MediaFile/**
 !Modules/Restart-NetworkStack/

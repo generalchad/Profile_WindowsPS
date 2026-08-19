@@ -131,14 +131,6 @@ function New-Hastebin {
     }
 }
 
-function Invoke-Explorer {
-    [CmdletBinding()]
-    param(
-        [string]$Path = "."
-    )
-    Start-Process -FilePath explorer.exe -ArgumentList $Path
-}
-
 function Invoke-PeriodicTable {
     if (Test-CommandExists "periodic-table-cli") {
         periodic-table-cli

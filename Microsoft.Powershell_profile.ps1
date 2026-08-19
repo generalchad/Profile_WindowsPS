@@ -56,20 +56,8 @@ if (Test-Path $ConfigPath) {
 }
 if ($ProfileTrace) { Mark 'Config' }
 
-# 2. Load Functions & Utilities (Loose Script Blocks)
-foreach ($Folder in "Functions", "Utilities") {
-    $Path = Join-Path $ProfileRoot $Folder
-    if (Test-Path $Path) {
-        foreach ($File in [System.IO.Directory]::GetFiles($Path, "*.ps1")) {
-            try {
-                . $File
-            } catch {
-                Write-Warning "Failed to load script $($File): $_"
-            }
-        }
-    }
-}
-if ($ProfileTrace) { Mark 'Functions+Utilities' }
+# 2. Functions & Utilities are now the ProfileTools module (Modules/ProfileTools),
+#    exported via its manifest so they autoload on first use. No eager dot-sourcing.
 
 # 2.5 Register Custom Modules (Leveraging Lazy-Loading Autoload)
 $LocalModulesPath = Join-Path $ProfileRoot "Modules"
