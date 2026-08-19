@@ -35,10 +35,18 @@ if ($ProfileTrace) {
 # 1. Load Settings (Theme, Editor, PSReadline)
 $ConfigPath = Join-Path $ProfileRoot "Config"
 if (Test-Path $ConfigPath) {
+    # CommandCache.ps1 must be loaded FIRST: Settings.ps1 and Aliases.ps1 both
+    # depend on Resolve-CachedCommand to avoid slow Get-Command probes.
+    $CommandCacheFile = Join-Path $ConfigPath "CommandCache.ps1"
+    if (Test-Path $CommandCacheFile) {
+        try { . $CommandCacheFile } catch { Write-Warning "Failed to load command cache: $_" }
+    }
+
     # Using high-performance .NET file enumeration to skip Get-ChildItem object overhead
-    # Excluding Aliases.ps1 so it can be loaded last in Step 3
+    # Excluding Aliases.ps1 (loaded last in Step 3) and CommandCache.ps1 (loaded above).
     foreach ($File in [System.IO.Directory]::GetFiles($ConfigPath, "*.ps1")) {
-        if ([System.IO.Path]::GetFileName($File) -eq "Aliases.ps1") { continue }
+        $Name = [System.IO.Path]::GetFileName($File)
+        if ($Name -eq "Aliases.ps1" -or $Name -eq "CommandCache.ps1") { continue }
         try {
             . $File
         } catch {
@@ -90,7 +98,7 @@ if ($ProfileTrace) { Mark 'Aliases' }
 # Oh-My-Posh (Optimized Caching - Only regenerate if cache missing)
 $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
 $OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
-$OmpExe   = (Get-Command oh-my-posh -ErrorAction SilentlyContinue).Source
+$OmpExe   = Resolve-CachedCommand 'oh-my-posh'
 
 if ($OmpExe -and (Test-Path $OmpTheme)) {
     # Only regenerate if cache doesn't exist (eliminates 3 Get-Item calls on normal loads)
@@ -112,7 +120,7 @@ if ($ProfileTrace) { Mark 'oh-my-posh' }
 
 # Zoxide (Optimized Caching - Only regenerate if cache missing)
 $ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
-$ZoxideExe   = (Get-Command zoxide -ErrorAction SilentlyContinue).Source
+$ZoxideExe   = Resolve-CachedCommand 'zoxide'
 
 if ($ZoxideExe) {
     # Only regenerate if cache doesn't exist (eliminates 2 Get-Item calls on normal loads)

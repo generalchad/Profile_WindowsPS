@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 
 # --- Core System ---
-if (Get-Command ntop -ErrorAction SilentlyContinue) { Set-Alias -Name top -Value ntop }
+if (Resolve-CachedCommand 'ntop') { Set-Alias -Name top -Value ntop }
 Set-Alias -Name ep  -Value Edit-Profile
 # Attempting to override 'sp' (Set-Property) alias safely
 try { Set-Alias -Name sp -Value Sync-Profile -Force -ErrorAction Stop } catch {
@@ -11,8 +11,8 @@ try { Set-Alias -Name sp -Value Sync-Profile -Force -ErrorAction Stop } catch {
 }
 
 # Set-Alias for 'grep' and 'sed' only if they aren't already binaries in PATH
-if (-not (Get-Command grep -ErrorAction SilentlyContinue)) { Set-Alias -Name grep -Value Find-Text }
-if (-not (Get-Command sed -ErrorAction SilentlyContinue))  { Set-Alias -Name sed  -Value Replace-Text }
+if (-not (Resolve-CachedCommand 'grep')) { Set-Alias -Name grep -Value Find-Text }
+if (-not (Resolve-CachedCommand 'sed'))  { Set-Alias -Name sed  -Value Replace-Text }
 
 # Using -Force to overwrite the default 'which' (Get-Command) alias
 Set-Alias -Name which -Value Get-Command -Force
@@ -29,17 +29,18 @@ if (-not [string]::IsNullOrEmpty($env:EDITOR)) {
 }
 
 # 2. VS Code Logic - Optimized to check PATH and fallback to default install paths
-$insidersCmd = (Get-Command code-insiders.cmd, code-insiders -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
-$stableCmd   = (Get-Command code.cmd, code -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
-
-$insidersPath = if ($insidersCmd) { $insidersCmd.Source } else {
+$insidersPath = Resolve-CachedCommand 'code-insiders.cmd'
+if (-not $insidersPath) { $insidersPath = Resolve-CachedCommand 'code-insiders' }
+if (-not $insidersPath) {
     $p = "$env:LOCALAPPDATA\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd"
-    if (Test-Path $p) { $p } else { $null }
+    if (Test-Path $p) { $insidersPath = $p }
 }
 
-$stablePath = if ($stableCmd) { $stableCmd.Source } else {
+$stablePath = Resolve-CachedCommand 'code.cmd'
+if (-not $stablePath) { $stablePath = Resolve-CachedCommand 'code' }
+if (-not $stablePath) {
     $p = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
-    if (Test-Path $p) { $p } else { $null }
+    if (Test-Path $p) { $stablePath = $p }
 }
 
 if ($insidersPath -and -not $stablePath) {

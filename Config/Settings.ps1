@@ -59,9 +59,8 @@ try {
 $editorPriority = 'nvim', 'vim', 'vi', 'code-insiders.cmd', 'code-insiders', 'code.cmd', 'code', 'notepad++'
 $script:foundEditor = $null
 foreach ($editor in $editorPriority) {
-    $cmd = Get-Command $editor -CommandType Application -ErrorAction SilentlyContinue
-    if ($cmd) {
-        $script:foundEditor = $cmd.Name
+    if (Resolve-CachedCommand $editor) {
+        $script:foundEditor = $editor
         break
     }
 }
