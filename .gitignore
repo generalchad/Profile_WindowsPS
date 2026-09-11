@@ -27,6 +27,8 @@ Modules/Format-UsbDrive/
 Modules/Format-UsbDrive/**
 
 # 6. Specific Module Whitelist
+!Modules/Format-UsbDrive/
+!Modules/Format-UsbDrive/**
 !Modules/Compress-Video/
 !Modules/Compress-Video/**
 !Modules/Optimize-PSX/
