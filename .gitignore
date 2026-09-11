@@ -22,6 +22,9 @@
 !Themes/**
 
 # 5. Whitelist Exceptions (Re-ignore specific subfolders and contents)
+# Local-only module: kept out of the repo by design.
+Modules/Format-UsbDrive/
+Modules/Format-UsbDrive/**
 
 # 6. Specific Module Whitelist
 !Modules/Compress-Video/
