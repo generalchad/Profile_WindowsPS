@@ -8,6 +8,7 @@
 
 # 2. Root Files to Track
 !.gitignore
+!COMMENT-ETIQUETTE.md
 !CONTEXT.md
 !Microsoft.PowerShell_profile.ps1
 
