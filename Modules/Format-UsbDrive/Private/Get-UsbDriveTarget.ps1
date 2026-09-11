@@ -23,6 +23,7 @@ function New-UsbTarget {
         FriendlyName    = $Disk.FriendlyName
         FileSystem      = if ($vol) { $vol.FileSystem } else { 'Unknown' }
         VolumeLabel     = if ($vol -and $vol.FileSystemLabel) { $vol.FileSystemLabel } else { '' }
+        UsbSpeed        = Get-UsbSpeed -DiskNumber $Disk.Number
     }
 }
 
