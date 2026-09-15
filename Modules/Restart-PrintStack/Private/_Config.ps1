@@ -59,6 +59,11 @@ $script:DefaultKeepPrinterDrivers = @(
 # LPT/COM are physical hardware ports enumerated by the OS, not spooler
 # objects; they reappear on reboot but the deletion attempt logs a
 # spurious failure, so they are excluded up front.
+#
+# IPP ports are deliberately NOT protected: they are created per device when a
+# technician adds a Mopria/AirPrint copier, exactly like a Standard TCP/IP port,
+# so an orphaned IPP port is the same site-clutter a TCP/IP port is and belongs
+# in the sweep rather than beside FILE:/nul:.
 # ---------------------------------------------------------------------
 $script:ProtectedPortNames = @(
     'FILE:'
@@ -75,7 +80,6 @@ $script:ProtectedPortNames = @(
     'USB*'
     'LPT*'
     'COM*'
-    'IPP*'
 )
 
 # ---------------------------------------------------------------------
@@ -88,7 +92,9 @@ $script:ProtectedPortNames = @(
 # and their ports are recreated by the vendor software anyway.
 #
 # 'Standard TCP/IP Port' covers the ports created when a tech adds a
-# device by IP - by far the dominant source of clutter.
+# device by IP - by far the dominant source of clutter. The IPP monitors cover
+# Mopria/AirPrint copiers, which Windows adds through the IPP Class Driver
+# rather than a raw TCP port.
 # ---------------------------------------------------------------------
 $script:SweepablePortMonitors = @(
     'Standard TCP/IP Port'
@@ -96,6 +102,8 @@ $script:SweepablePortMonitors = @(
     'LPR Port'
     'AppleTalk Printing Devices'
     'Local Port'
+    'Internet Port'
+    'Microsoft IPP Class Driver'
 )
 
 # ---------------------------------------------------------------------
@@ -127,7 +135,25 @@ $script:ScannerDeviceClasses = @('Image', 'Camera')
 
 # Instance ID prefixes considered "network discovered" and therefore
 # sweepable by default.
-$script:NetworkDeviceIdPrefixes = @('WSD', 'SWD\WSD', 'ESCL', 'SWD\ESCL', 'ROOT\WSD')
+#
+# WSD/eSCL cover the discovery entries Windows creates on its own. The WIA
+# prefixes cover the vendor scan drivers (Canon/Kyocera/Ricoh/Xerox...) that a
+# full copier install adds as software devices instead of WSD; those enumerate
+# under SWD\WIA / ROOT\WIA and are every bit as stale as a WSD entry once the
+# copier is gone. A USB device always enumerates under USB\..., so none of these
+# can match physically attached hardware.
+# ---------------------------------------------------------------------
+$script:NetworkDeviceIdPrefixes = @(
+    'WSD'
+    'SWD\WSD'
+    'ESCL'
+    'SWD\ESCL'
+    'ROOT\WSD'
+    'ROOT\ESCL'
+    'SWD\WIA'
+    'ROOT\WIA'
+    'WIA'
+)
 
 # Instance ID prefixes that indicate a physically attached device.
 $script:LocalDeviceIdPrefixes = @('USB', 'USBPRINT', 'DOT4', 'SCSI', 'PCI', '1394')

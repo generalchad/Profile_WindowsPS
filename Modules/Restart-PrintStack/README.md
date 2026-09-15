@@ -12,8 +12,11 @@ it is about to do before it does it.
 
 | Command | Purpose |
 | --- | --- |
-| `Restart-PrintStack` | Plan, review and remove. Requires elevation (except `-WhatIf`). |
+| `Restart-PrintStack` | Plan, review and remove. Requires elevation (except `-WhatIf` and `-Help`). |
 | `Get-PrintStackInventory` | Read-only view of the same plan. Changes nothing. |
+
+Help is PowerShell-style: use `-Help`, `-?` or `Get-Help`. The Unix `--help`
+spelling is not a PowerShell parameter and will not be recognised.
 
 ## Quick start
 
@@ -23,6 +26,9 @@ Get-PrintStackInventory
 
 # Preview without elevation, without touching anything.
 Restart-PrintStack -WhatIf
+
+# Full help, also without elevation.
+Restart-PrintStack -Help
 
 # The real thing: interactive review, then removal.
 Restart-PrintStack
@@ -34,14 +40,15 @@ By default:
 
 - Print queues that do not match a keep rule
 - Printer ports left behind with no queue referencing them
-- Imaging devices (scanners) discovered over the network - WSD and eSCL entries
+- Imaging devices (scanners) discovered over the network - WSD, eSCL and the
+  vendor WIA drivers a full copier install leaves behind
 
 By default **not**:
 
 - The built-in virtual printers (PDF, XPS, OneNote, Fax, Adobe)
 - `\\server\queue` network connections - Group Policy recreates them, so removing
-  them breaks printing for a few minutes and achieves nothing (`-IncludeNetwork`
-  to override)
+  them breaks printing for a few minutes and achieves nothing. Shared copiers are
+  the common case here; pass `-IncludeNetwork` to drop them.
 - RDP-redirected session printers - the remote session owns them
   (`-IncludeRedirected`)
 - USB-attached scanners - they re-enumerate the instant they are reconnected
@@ -105,9 +112,10 @@ are read back and rewritten intact.
 
 ## Safety
 
-- **Elevation required.** The spooler rejects deletions otherwise. `-WhatIf`
-  is exempt, because previewing the plan changes nothing and you shouldn't need
-  an admin window to find out whether you need one.
+- **Elevation required.** The spooler rejects deletions otherwise. `-WhatIf`,
+  `-Help` and `Get-PrintStackInventory` are exempt, because none of them changes
+  anything and you shouldn't need an admin window just to find out whether you
+  need one.
 - **Backup first.** A JSON snapshot of every queue, port and device - names,
   drivers, IP addresses - is written to `%TEMP%\Restart-PrintStack_<timestamp>\`
   before anything is deleted. Enough to recreate a queue by hand without phoning
@@ -129,12 +137,14 @@ are read back and rewritten intact.
 | `-Keep 'HP*'` | Protect for this run only. |
 | `-Remove 'Adobe PDF'` | Force removal, overriding every keep rule. |
 | `-Pin 'Shop Printer'` | Write straight to the allow-list, no review screen. |
+| `-IncludeNetwork` | Also remove `\\server\queue` connections (shared copiers). |
 | `-NoPortSweep` | Leave all ports alone. |
 | `-NoScanners` | Leave all imaging devices alone. |
 | `-SetDefault 'Microsoft Print to PDF'` | Nominate the default afterwards. |
 | `-NonInteractive` | Single yes/no prompt instead of the review screen. |
 | `-Force` | No prompting at all. For scripted builds. |
 | `-PassThru` | Emit step-result objects as well as the summary. |
+| `-Help` | Show full help and exit. Does not require elevation. |
 
 ## Examples
 
@@ -168,14 +178,21 @@ everything that was there. Recreate with `Add-PrinterPort` and `Add-Printer`.
 ## Tests
 
 ```powershell
+# 49 read-only checks (selection parser, pattern matching, planning invariants).
 pwsh -NoProfile -File .\Tests\Plan.Probe.ps1
+
+# Synthetic copiers (TCP/IP, LPD, Local port) to exercise classification and
+# removal. Requires elevation; -List prints the fixtures without touching
+# anything and -Cleanup removes them.
+pwsh -NoProfile -File .\Tests\Add-TestPrinters.ps1
 ```
 
-48 read-only checks covering the selection parser, pattern matching, port
-splitting, allow-list merge behaviour and the planner's invariants - including
-the one that matters most, that no port in use by a surviving printer is ever
-planned for removal. The probe deletes nothing, touches no service, and exercises
-the allow-list through a temporary path so your real one is never modified.
+The probe deletes nothing, touches no service, and exercises the allow-list
+through a temporary path so your real one is never modified. The fixture script
+adds and removes only queues and ports whose names carry the `RPS-Test` prefix,
+so it can never collide with a genuine printer. WSD and IPP ports cannot be
+synthesised from cmdlets alone (WSD needs a real device on the wire, IPP has no
+`Add-PrinterPort` parameter set), so those are reproduced on a real machine.
 
 ## Implementation notes
 

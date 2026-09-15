@@ -79,6 +79,15 @@ function Restart-PrintStack {
     .PARAMETER PassThru
         Emit the step result objects instead of only printing the summary.
 
+    .PARAMETER Help
+        Show this help and exit. Unlike a bare run it does not require elevation,
+        so it is a safe first stop on an unelevated shell.
+
+    .EXAMPLE
+        Restart-PrintStack -Help
+
+        Shows the full help. Does not require elevation.
+
     .EXAMPLE
         Restart-PrintStack
 
@@ -103,9 +112,10 @@ function Restart-PrintStack {
         RestartPrintStack.StepResult objects when -PassThru is supplied.
 
     .NOTES
-        Requires an elevated session.
+        Requires an elevated session to make changes. -Help, -? and -WhatIf are
+        exempt: they only display information and are safe from an unelevated shell.
     #>
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    [CmdletBinding(PositionalBinding = $false, SupportsShouldProcess, ConfirmImpact = 'High')]
     [OutputType([pscustomobject])]
     param(
         [Parameter()]
@@ -129,7 +139,8 @@ function Restart-PrintStack {
 
         [switch] $NonInteractive,
         [switch] $Force,
-        [switch] $PassThru
+        [switch] $PassThru,
+        [switch] $Help
     )
 
     begin {
@@ -144,6 +155,18 @@ function Restart-PrintStack {
 
     process {
         # -------------------------------------------------------------
+        # 0. Help
+        # -------------------------------------------------------------
+        # Handled before the elevation gate so an unelevated shell can read it.
+        # (PowerShell's own -? is intercepted by the engine and never reaches this
+        # block; -Help is the explicit, scriptable equivalent.) Note this must live
+        # in process, not begin: a return in begin still runs the process block.
+        if ($Help) {
+            Get-Help -Name Restart-PrintStack -Full
+            return
+        }
+
+        # -------------------------------------------------------------
         # 1. Elevation
         # -------------------------------------------------------------
         # -WhatIf is allowed to run unelevated: previewing the plan changes
@@ -151,8 +174,11 @@ function Restart-PrintStack {
         # admin window just to find out whether they need one.
         if (-not (Test-Elevation)) {
             if (-not $dryRun) {
-                Write-Warning 'Restart-PrintStack requires an elevated session.'
+                Write-Warning 'Restart-PrintStack requires an elevated session to make changes.'
                 Write-Host "  Relaunch with: $(Get-ElevationHint)" -ForegroundColor DarkGray
+                Write-Host '  Preview without elevation:   Restart-PrintStack -WhatIf' -ForegroundColor DarkGray
+                Write-Host '  Read-only inventory:         Get-PrintStackInventory' -ForegroundColor DarkGray
+                Write-Host '  Full help:                   Restart-PrintStack -Help' -ForegroundColor DarkGray
                 return
             }
             Write-Warning 'Not elevated - this is a preview only; an elevated session is required to apply it.'
