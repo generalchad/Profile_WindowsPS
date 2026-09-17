@@ -27,7 +27,16 @@ function Compress-Video {
         Custom output file (single input) or directory (batch mode).
 
     .PARAMETER DeleteSource
-        Deletes the source file after a successful, verified compression.
+        Deletes the source file after the output is verified. Verification
+        always requires a matching duration (within ResumeDurationTolerance)
+        and a non-empty, ffprobe-readable output. Add -FullVerify to also
+        require a full error-free decode of the output.
+
+    .PARAMETER FullVerify
+        In addition to the duration check, decode the entire output with
+        ffmpeg (-xerror) and only delete the source if it decodes cleanly.
+        Slower (a full decode pass per file) but the strongest integrity
+        guarantee. Only meaningful together with -DeleteSource.
 
     .PARAMETER Recurse
         Recurse into subdirectories when InputFilePath is a directory.
@@ -58,6 +67,12 @@ function Compress-Video {
     .PARAMETER Force
         Re-encode even if a valid compressed output already exists.
 
+    .PARAMETER Help
+        Show the full help and return without doing anything.
+
+    .EXAMPLE
+        Compress-Video -Help
+
     .EXAMPLE
         Compress-Video -InputFilePath "C:\Videos" -Recurse
 
@@ -80,6 +95,9 @@ function Compress-Video {
         [Parameter()]
         [Alias("Delete", "del")]
         [switch]$DeleteSource,
+
+        [Parameter()]
+        [switch]$FullVerify,
 
         [Parameter()]
         [switch]$Recurse,
@@ -108,10 +126,18 @@ function Compress-Video {
         [string]$Preset,
 
         [Parameter()]
-        [switch]$Force
+        [switch]$Force,
+
+        [Parameter()]
+        [switch]$Help
     )
 
     begin {
+        if ($Help) {
+            Get-Help -Name Compress-Video -Full
+            return
+        }
+
         $config = Get-CompressVideoConfigInternal
 
         $effectiveExtensions = if ($PSBoundParameters.ContainsKey('Extensions')) { $Extensions } else { $config['DefaultExtensions'] }
@@ -160,6 +186,8 @@ function Compress-Video {
     }
 
     process {
+        if ($Help) { return }
+
         try {
             $resolvedInput = (Resolve-Path $InputFilePath -ErrorAction Stop).Path
         } catch {
@@ -239,13 +267,16 @@ function Compress-Video {
                 Write-Host "`nConverting: $($item.Video.Name)" -ForegroundColor Cyan
 
                 $result = Invoke-FFmpegJob -InputFile $item.Video -OutputPath $item.DestPath -FFmpegArgs $item.FFmpegArgs `
-                                            -Priority $effectivePriority -DeleteSource:$DeleteSource
+                                            -Priority $effectivePriority -DeleteSource:$DeleteSource -Tolerance $tolerance -FullVerify:$FullVerify
 
                 if ($result.Success) {
                     $metric = Get-CompressionMetrics -Result $result
                     if ($metric) {
                         $pipelineStats.Add($metric)
                         Write-Host " [OK] Saved $($metric.SavingsPercent)%" -ForegroundColor Green
+                    }
+                    if ($DeleteSource -and -not $result.DeletedSource) {
+                        Write-Warning "Source retained for $($result.InputFile.Name): $($result.VerifyReason)"
                     }
                 } else {
                     Write-Error "Failed to process $($item.Video.Name): $($result.Error)"
@@ -258,6 +289,8 @@ function Compress-Video {
             # consumed back on the main thread for stats/progress.
             $priorityArg = $effectivePriority
             $deleteArg   = [bool]$DeleteSource
+            $toleranceArg = $tolerance
+            $fullVerifyArg = [bool]$FullVerify
 
             $results = $workItems | ForEach-Object -ThrottleLimit $effectiveThrottle -Parallel {
                 $item = $_
@@ -266,10 +299,13 @@ function Compress-Video {
                 # Re-import just the functions this branch needs from the parent
                 # module's Private folder, since -Parallel runs in an isolated
                 # runspace with a fresh module state.
+                . (Join-Path $modulePath '..\Private\Get-VideoDuration.ps1')
+                . (Join-Path $modulePath '..\Private\Test-CompressedOutput.ps1')
+                . (Join-Path $modulePath '..\Private\Test-OutputIntegrity.ps1')
                 . (Join-Path $modulePath '..\Private\Invoke-FFmpegJob.ps1')
 
                 Invoke-FFmpegJob -InputFile $item.Video -OutputPath $item.DestPath -FFmpegArgs $item.FFmpegArgs `
-                                  -Priority $using:priorityArg -DeleteSource:$using:deleteArg
+                                  -Priority $using:priorityArg -DeleteSource:$using:deleteArg -Tolerance $using:toleranceArg -FullVerify:$using:fullVerifyArg
             }
 
             foreach ($result in $results) {
@@ -282,6 +318,9 @@ function Compress-Video {
                         $pipelineStats.Add($metric)
                         Write-Host "[OK] $($result.InputFile.Name) - Saved $($metric.SavingsPercent)%" -ForegroundColor Green
                     }
+                    if ($DeleteSource -and -not $result.DeletedSource) {
+                        Write-Warning "Source retained for $($result.InputFile.Name): $($result.VerifyReason)"
+                    }
                 } else {
                     Write-Error "Failed to process $($result.InputFile.Name): $($result.Error)"
                 }
@@ -290,6 +329,8 @@ function Compress-Video {
     }
 
     end {
+        if ($Help) { return }
+
         Write-CompressionSummary -Stats $pipelineStats
 
         if ($script:LoggingActive) {

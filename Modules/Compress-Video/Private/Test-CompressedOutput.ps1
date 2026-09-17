@@ -21,6 +21,11 @@ function Test-CompressedOutput {
         Fractional tolerance (e.g. 0.01 = 1%) allowed between input and
         output durations before the output is considered invalid.
 
+    .PARAMETER Strict
+        When the source duration cannot be read, report 'Invalid' instead
+        of the normal 'Complete'. Used by deletion-safety callers so a
+        source is never deleted without being able to verify the output.
+
     .OUTPUTS
         PSCustomObject with:
             Status  - 'Complete', 'Missing', or 'Invalid'
@@ -36,7 +41,10 @@ function Test-CompressedOutput {
         [string]$OutputPath,
 
         [Parameter()]
-        [double]$Tolerance = 0.01
+        [double]$Tolerance = 0.01,
+
+        [Parameter()]
+        [switch]$Strict
     )
 
     process {
@@ -51,8 +59,14 @@ function Test-CompressedOutput {
 
         $inDuration = Get-VideoDuration -Path $InputPath
         if ($null -eq $inDuration -or $inDuration -le 0) {
-            # We can't validate against a source we can't read either; treat
-            # the existing output as complete rather than blocking forever.
+            if ($Strict) {
+                # Deletion-safety callers must NOT trust an unverifiable
+                # source - treat it as invalid so the source is never
+                # deleted without proof.
+                return [PSCustomObject]@{ Status = 'Invalid'; Reason = 'Source duration unreadable; cannot verify' }
+            }
+            # Skip-detection callers treat the existing output as complete
+            # rather than blocking forever.
             return [PSCustomObject]@{ Status = 'Complete'; Reason = 'Source duration unreadable; trusting existing output' }
         }
 

@@ -14,6 +14,14 @@ function Invoke-FFmpegJob {
     .PARAMETER Priority
         One of Idle, BelowNormal, Normal. Applied via
         System.Diagnostics.Process.PriorityClass.
+
+    .PARAMETER Tolerance
+        Fractional duration tolerance passed to the pre-delete verification.
+
+    .PARAMETER FullVerify
+        In addition to the duration check, require a full error-free decode
+        of the output before the source is deleted. Only consulted when
+        -DeleteSource is set.
     #>
     [CmdletBinding()]
     [OutputType([PSCustomObject])]
@@ -30,6 +38,12 @@ function Invoke-FFmpegJob {
         [Parameter()]
         [ValidateSet('Idle', 'BelowNormal', 'Normal')]
         [string]$Priority = 'BelowNormal',
+
+        [Parameter()]
+        [double]$Tolerance = 0.01,
+
+        [Parameter()]
+        [switch]$FullVerify,
 
         [switch]$DeleteSource
     )
@@ -66,16 +80,34 @@ function Invoke-FFmpegJob {
             if ($exitCode -eq 0) {
                 $outputItem = Get-Item $OutputPath -ErrorAction SilentlyContinue
 
-                if ($DeleteSource -and $outputItem) {
-                    Remove-Item $InputFile.FullName -Force
-                    Write-Verbose "Deleted source: $($InputFile.FullName)"
+                $deletedSource = $false
+                $verifyReason  = $null
+
+                if ($DeleteSource) {
+                    if ($outputItem -and $outputItem.Length -gt 0) {
+                        $durationCheck = Test-CompressedOutput -InputPath $InputFile.FullName -OutputPath $OutputPath -Tolerance $Tolerance -Strict
+
+                        if ($durationCheck.Status -ne 'Complete') {
+                            $verifyReason = $durationCheck.Reason
+                        } elseif ($FullVerify -and -not (Test-OutputIntegrity -Path $OutputPath)) {
+                            $verifyReason = 'Full decode verification failed: output decodes with errors'
+                        } else {
+                            Remove-Item $InputFile.FullName -Force
+                            $deletedSource = $true
+                            Write-Verbose "Deleted source: $($InputFile.FullName)"
+                        }
+                    } else {
+                        $verifyReason = 'Output file is missing or empty'
+                    }
                 }
 
                 return [PSCustomObject]@{
-                    Success    = $true
-                    InputFile  = $InputFile
-                    OutputFile = $outputItem
-                    Error      = $null
+                    Success       = $true
+                    InputFile     = $InputFile
+                    OutputFile    = $outputItem
+                    DeletedSource = $deletedSource
+                    VerifyReason  = $verifyReason
+                    Error         = $null
                 }
             } else {
                 $stderrText = if (Test-Path $stdErrPath) { Get-Content $stdErrPath -Raw } else { "" }
@@ -84,10 +116,12 @@ function Invoke-FFmpegJob {
         }
         catch {
             return [PSCustomObject]@{
-                Success    = $false
-                InputFile  = $InputFile
-                OutputFile = $null
-                Error      = $_
+                Success       = $false
+                InputFile     = $InputFile
+                OutputFile    = $null
+                DeletedSource = $false
+                VerifyReason  = $null
+                Error         = $_
             }
         }
         finally {
