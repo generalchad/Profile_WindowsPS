@@ -26,19 +26,31 @@ function Test-OutputIntegrity {
 
         $stdErrPath = [System.IO.Path]::GetTempFileName()
         $stdOutPath = [System.IO.Path]::GetTempFileName()
+        $proc = $null
 
         try {
-            $startInfo = @{
-                FilePath               = 'ffmpeg'
-                ArgumentList           = @('-v', 'error', '-xerror', '-i', $Path, '-f', 'null', '-')
-                NoNewWindow            = $true
-                PassThru               = $true
-                RedirectStandardError  = $stdErrPath
-                RedirectStandardOutput = $stdOutPath
-                Wait                   = $false
+            # .ArgumentList (not Start-Process -ArgumentList) so paths with
+            # spaces are quoted per platform rules instead of being split.
+            $psi = [System.Diagnostics.ProcessStartInfo]::new()
+            $psi.FileName = 'ffmpeg'
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            foreach ($arg in @('-v', 'error', '-xerror', '-i', $Path, '-f', 'null', '-')) {
+                $psi.ArgumentList.Add($arg)
             }
 
-            $proc = Start-Process @startInfo
+            $proc = [System.Diagnostics.Process]::new()
+            $proc.StartInfo = $psi
+            $null = $proc.Start()
+
+            $errStream = $proc.StandardError.BaseStream
+            $outStream = $proc.StandardOutput.BaseStream
+            $errFile = [System.IO.File]::Open($stdErrPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+            $outFile = [System.IO.File]::Open($stdOutPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+            $errTask = $errStream.CopyToAsync($errFile)
+            $outTask = $outStream.CopyToAsync($outFile)
 
             try {
                 $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
@@ -47,11 +59,18 @@ function Test-OutputIntegrity {
             }
 
             $proc.WaitForExit()
-            return ($proc.ExitCode -eq 0)
+            $exitCode = $proc.ExitCode
+            $null = $errTask.GetAwaiter().GetResult()
+            $null = $outTask.GetAwaiter().GetResult()
+            $errFile.Dispose()
+            $outFile.Dispose()
+
+            return ($exitCode -eq 0)
         } catch {
             Write-Verbose "Integrity verification failed: $_"
             return $false
         } finally {
+            if ($proc) { $proc.Dispose() }
             foreach ($tmp in @($stdErrPath, $stdOutPath)) {
                 if ($tmp -and (Test-Path -LiteralPath $tmp)) {
                     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue

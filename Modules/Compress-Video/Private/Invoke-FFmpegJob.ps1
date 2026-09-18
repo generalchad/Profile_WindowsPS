@@ -5,11 +5,14 @@ function Invoke-FFmpegJob {
         priority class, waits for completion, and returns a result object.
 
     .DESCRIPTION
-        Internal helper. Not exported. Uses Start-Process rather than the
-        `&` call operator so the process's PriorityClass can be set right
-        after launch - this keeps compression from starving the
-        interactive session's CPU/GPU scheduling, per the module's
-        "never saturate the PC" design goal.
+        Internal helper. Not exported. Uses System.Diagnostics.Process
+        with ProcessStartInfo.ArgumentList rather than Start-Process: the
+        ArgumentList collection quotes each argument per the platform
+        rules, so paths with spaces survive intact (Start-Process joins an
+        array with unquoted spaces, truncating them at the first space).
+        PriorityClass is set right after launch - this keeps compression
+        from starving the interactive session's CPU/GPU scheduling, per the
+        module's "never saturate the PC" design goal.
 
     .PARAMETER Priority
         One of Idle, BelowNormal, Normal. Applied via
@@ -49,19 +52,28 @@ function Invoke-FFmpegJob {
     )
 
     process {
+        $stdErrPath = [System.IO.Path]::GetTempFileName()
+        $proc = $null
+        $errFile = $null
+
         try {
-            $stdErrPath = [System.IO.Path]::GetTempFileName()
+            $psi = [System.Diagnostics.ProcessStartInfo]::new()
+            $psi.FileName = 'ffmpeg'
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            $psi.RedirectStandardError = $true
+            foreach ($arg in $FFmpegArgs) { $psi.ArgumentList.Add($arg) }
 
-            $startInfo = @{
-                FilePath               = 'ffmpeg'
-                ArgumentList           = $FFmpegArgs
-                NoNewWindow            = $true
-                PassThru               = $true
-                RedirectStandardError  = $stdErrPath
-                Wait                   = $false
-            }
+            $proc = [System.Diagnostics.Process]::new()
+            $proc.StartInfo = $psi
+            $null = $proc.Start()
 
-            $proc = Start-Process @startInfo
+            # Drain stderr to the temp file asynchronously. A redirected pipe
+            # fills and blocks the child once its buffer is full, so the stream
+            # must be consumed while the process runs rather than after.
+            $errStream = $proc.StandardError.BaseStream
+            $errFile = [System.IO.File]::Open($stdErrPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+            $errTask = $errStream.CopyToAsync($errFile)
 
             try {
                 $priorityMap = @{
@@ -76,6 +88,11 @@ function Invoke-FFmpegJob {
 
             $proc.WaitForExit()
             $exitCode = $proc.ExitCode
+            # GetResult() on a Task<VoidTaskResult> emits the result struct to
+            # the pipeline, so it must be discarded or it corrupts the return.
+            $null = $errTask.GetAwaiter().GetResult()
+            $errFile.Dispose()
+            $errFile = $null
 
             if ($exitCode -eq 0) {
                 $outputItem = Get-Item $OutputPath -ErrorAction SilentlyContinue
@@ -110,8 +127,11 @@ function Invoke-FFmpegJob {
                     Error         = $null
                 }
             } else {
-                $stderrText = if (Test-Path $stdErrPath) { Get-Content $stdErrPath -Raw } else { "" }
-                throw "FFmpeg exited with code $exitCode. $stderrText"
+                # Only the tail matters: the banner/version/config preamble is
+                # noise. The last lines carry the actual failure reason.
+                $stderrLines = if (Test-Path $stdErrPath) { Get-Content $stdErrPath -ErrorAction SilentlyContinue } else { @() }
+                $stderrTail = ($stderrLines | Select-Object -Last 30) -join "`n"
+                throw "FFmpeg exited with code $exitCode. $stderrTail"
             }
         }
         catch {
@@ -125,6 +145,8 @@ function Invoke-FFmpegJob {
             }
         }
         finally {
+            if ($errFile) { $errFile.Dispose() }
+            if ($proc) { $proc.Dispose() }
             if ($stdErrPath -and (Test-Path $stdErrPath)) {
                 Remove-Item $stdErrPath -Force -ErrorAction SilentlyContinue
             }

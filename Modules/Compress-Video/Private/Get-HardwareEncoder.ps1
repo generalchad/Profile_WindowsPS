@@ -2,12 +2,17 @@ function Get-HardwareEncoder {
     <#
     .SYNOPSIS
         Resolves which HEVC encoder to use based on -HardwareAccel and
-        the encoders actually compiled into the local ffmpeg build.
+        whether the encoder actually initializes on this machine.
 
     .DESCRIPTION
-        Internal helper. Not exported. Probes `ffmpeg -hide_banner -encoders`
-        once per session (cached in $script:AvailableEncoders) and maps the
-        requested acceleration mode to a concrete ffmpeg -c:v value.
+        Internal helper. Not exported. "Compiled in" is not "works at
+        runtime": a full ffmpeg build lists hevc_nvenc/hevc_qsv/hevc_amf
+        even when the matching driver is absent, and then fails on the
+        first real encode (e.g. NVENC cannot load nvcuda.dll without an
+        NVIDIA driver). So instead of grepping `ffmpeg -encoders`, each
+        candidate is validated with a one-frame null encode and only the
+        ones that exit cleanly are considered available. Results are
+        cached per session in $script:AvailableEncoders.
 
         Priority order for 'Auto': NVENC > QSV > AMF > CPU (libx265).
 
@@ -36,15 +41,10 @@ function Get-HardwareEncoder {
         # throws, so the cache must be probed via Test-Path variable:
         # rather than a plain truthiness check on first-ever access.
         if (-not (Test-Path Variable:script:AvailableEncoders) -or -not $script:AvailableEncoders) {
-            try {
-                $raw = & ffmpeg -hide_banner -encoders 2>&1 | Out-String
-            } catch {
-                $raw = ""
-            }
             $script:AvailableEncoders = @{
-                NVENC = ($raw -match 'hevc_nvenc')
-                QSV   = ($raw -match 'hevc_qsv')
-                AMF   = ($raw -match 'hevc_amf')
+                NVENC = Test-EncoderInitializes -Encoder 'hevc_nvenc'
+                QSV   = Test-EncoderInitializes -Encoder 'hevc_qsv'
+                AMF   = Test-EncoderInitializes -Encoder 'hevc_amf'
             }
         }
 
@@ -58,7 +58,7 @@ function Get-HardwareEncoder {
             if ($script:AvailableEncoders[$HardwareAccel]) {
                 return [PSCustomObject]@{ Encoder = $map[$HardwareAccel]; IsHardware = $true }
             }
-            Write-Warning "Requested hardware encoder '$HardwareAccel' was not found in this ffmpeg build. Falling back to CPU (libx265)."
+            Write-Warning "Requested hardware encoder '$HardwareAccel' could not initialize on this machine. Falling back to CPU (libx265)."
             return [PSCustomObject]@{ Encoder = 'libx265'; IsHardware = $false }
         }
 
@@ -70,5 +70,35 @@ function Get-HardwareEncoder {
         }
 
         return [PSCustomObject]@{ Encoder = 'libx265'; IsHardware = $false }
+    }
+}
+
+function Test-EncoderInitializes {
+    <#
+    .SYNOPSIS
+        Returns $true only if ffmpeg can actually open the given encoder
+        on this machine (not merely that it is compiled in).
+
+    .DESCRIPTION
+        Internal helper. Not exported. Runs a one-frame null encode, which
+        forces the encoder to initialize (load its driver/DLL, allocate a
+        session) without writing a file. A missing driver - e.g. NVENC
+        without nvcuda.dll - makes ffmpeg exit non-zero, so the encoder is
+        reported unavailable and callers fall back to the next candidate.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Encoder
+    )
+
+    process {
+        try {
+            $null = & ffmpeg -hide_banner -v error -f lavfi -i "color=black:s=32x32:d=0.1" -frames:v 1 -c:v $Encoder -f null - 2>&1
+            return ($LASTEXITCODE -eq 0)
+        } catch {
+            return $false
+        }
     }
 }
