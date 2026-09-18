@@ -47,3 +47,5 @@ Modules/Format-UsbDrive/**
 !Modules/Test-FileShare/**
 !Modules/Test-SmtpRelay/
 !Modules/Test-SmtpRelay/**
+!Modules/Test-UdpPort/
+!Modules/Test-UdpPort/**
