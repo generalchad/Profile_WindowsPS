@@ -137,7 +137,13 @@ function Optimize-PSX {
         if ($Compression) {
             $invalid = @($Compression | Where-Object { $_ -notin $script:ValidCodecs })
             if ($invalid.Count -gt 0) {
-                throw "Unknown compression codec(s): $($invalid -join ', '). Valid codecs: $($script:ValidCodecs -join ', ')"
+                $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    [System.ArgumentException]::new("Unknown compression codec(s): $($invalid -join ', '). Valid codecs: $($script:ValidCodecs -join ', ')"),
+                    'InvalidCompressionCodec',
+                    [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                    $null
+                )
+                $PSCmdlet.ThrowTerminatingError($errorRecord)
             }
         }
 
@@ -145,7 +151,13 @@ function Optimize-PSX {
         if (-not $SkipConversion) {
             $chdman = Resolve-ChdmanBinary -Path $ChdmanPath
             if (-not $chdman.Found) {
-                throw "$($chdman.Error) Install the MAME tools and add chdman to PATH, or pass -ChdmanPath."
+                $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    [System.IO.FileNotFoundException]::new("$($chdman.Error) Install the MAME tools and add chdman to PATH, or pass -ChdmanPath."),
+                    'ChdmanNotFound',
+                    [System.Management.Automation.ErrorCategory]::ObjectNotFound,
+                    $null
+                )
+                $PSCmdlet.ThrowTerminatingError($errorRecord)
             }
 
             $versionText = if ($chdman.Version) { "v$($chdman.Version)" } else { 'version unknown' }
@@ -159,11 +171,25 @@ function Optimize-PSX {
         try {
             $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).ProviderPath
         } catch {
-            throw "Path not found: '$Path'."
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                [System.Management.Automation.ItemNotFoundException]::new("Path not found: '$Path'."),
+                'PathNotFound',
+                [System.Management.Automation.ErrorCategory]::ObjectNotFound,
+                $Path
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
+            return
         }
 
         if (-not [System.IO.Directory]::Exists($resolved)) {
-            throw "Path is not a directory: '$resolved'."
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                [System.ArgumentException]::new("Path is not a directory: '$resolved'."),
+                'PathNotDirectory',
+                [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                $resolved
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
+            return
         }
 
         Write-OpsxLog "Optimize-PSX v$moduleVersion" -Level Info -Phase
