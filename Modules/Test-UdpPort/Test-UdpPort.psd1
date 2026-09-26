@@ -12,7 +12,7 @@
 RootModule = 'Test-UdpPort.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.0.2'
+ModuleVersion = '0.0.3'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -30,7 +30,7 @@ CompanyName = 'Unknown'
 Copyright = '(c) GenChadT. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Tests UDP port connectivity, with built-in game-server query packets (Source, Quake, Minecraft Bedrock, SA-MP).'
+Description = 'Tests UDP port connectivity, with built-in game-server query packets (Source/A2S, Quake, Minecraft Bedrock, SA-MP, ASE, and more).'
 
 # Minimum version of the PowerShell engine required by this module
 PowerShellVersion = '5.1'
