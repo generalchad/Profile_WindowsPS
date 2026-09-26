@@ -112,7 +112,9 @@ $isAdmin = ([Security.Principal.WindowsPrincipal]::new(
         [Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    throw 'This script must be run elevated to add or remove printers.'
+    Write-Warning 'This script must be run elevated to add or remove printers.'
+    Write-Host '  Relaunch with: Start-Process pwsh -Verb RunAs' -ForegroundColor DarkGray
+    return
 }
 
 $driver = Get-TestDriver
