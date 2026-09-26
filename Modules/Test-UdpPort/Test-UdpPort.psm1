@@ -30,6 +30,13 @@ $script:GameRegistry = @{
     MedalOfHonorAA    = @{ Port = 12203; Probe = 'quake' }
     CallOfDuty4       = @{ Port = 28960; Probe = 'quake' }
     SoldierOfFortune2 = @{ Port = 20100; Probe = 'quake' }
+
+    # ASE (All-Seeing Eye) titles
+    Mtasa = @{ Port = 22126; Probe = 'ase' }  # ASE query = game port 22003 + 123
+
+    # Bare probes (no stateless UDP query)
+    TeamSpeak3 = @{ Port = 9987;  Probe = 'none' }  # query is TCP ServerQuery on 10011
+    Factorio   = @{ Port = 34197; Probe = 'none' }  # status served over HTTPS, not UDP
 }
 
 function Test-UdpPort {
@@ -56,7 +63,7 @@ function Test-UdpPort {
         Dragonwilds, ProjectZomboid, CS2, TeamFortress2, GarrysMod, Left4Dead2,
         Rust, Valheim, Ark, DayZ, SevenDaysToDie, VRising, SonsOfTheForest,
         EnemyTerritory, JediAcademy, MedalOfHonorAA, CallOfDuty4,
-        SoldierOfFortune2.
+        SoldierOfFortune2, TeamSpeak3, Factorio, Mtasa.
 
     .PARAMETER Port
         The UDP port to test. Required unless -Protocol supplies a default.
@@ -76,7 +83,7 @@ function Test-UdpPort {
         [string[]]$ComputerName,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Source', 'Quake', 'Minecraft', 'Samp', 'Palworld', 'Arma3', 'ArmaReforger', 'Dragonwilds', 'ProjectZomboid', 'CS2', 'TeamFortress2', 'GarrysMod', 'Left4Dead2', 'Rust', 'Valheim', 'Ark', 'DayZ', 'SevenDaysToDie', 'VRising', 'SonsOfTheForest', 'EnemyTerritory', 'JediAcademy', 'MedalOfHonorAA', 'CallOfDuty4', 'SoldierOfFortune2')]
+        [ValidateSet('Source', 'Quake', 'Minecraft', 'Samp', 'Palworld', 'Arma3', 'ArmaReforger', 'Dragonwilds', 'ProjectZomboid', 'CS2', 'TeamFortress2', 'GarrysMod', 'Left4Dead2', 'Rust', 'Valheim', 'Ark', 'DayZ', 'SevenDaysToDie', 'VRising', 'SonsOfTheForest', 'EnemyTerritory', 'JediAcademy', 'MedalOfHonorAA', 'CallOfDuty4', 'SoldierOfFortune2', 'TeamSpeak3', 'Factorio', 'Mtasa')]
         [string]$Protocol,
 
         [Parameter(Mandatory = $false)]
@@ -225,6 +232,11 @@ function Get-GameProbeBytes {
                 [byte[]]$octets +
                 $portBytes +
                 [byte[]]0x69
+        }
+        'ase' {
+            # ASE (All-Seeing Eye) server info query: a single 's' byte. The
+            # reply begins with "EYE1". Used by MTA:SA (and SA-MP's ASE mode).
+            return [byte[]]0x73
         }
         'none' {
             return [byte[]]@()
