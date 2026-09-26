@@ -28,11 +28,10 @@
             ReleaseNotes = @'
 1.1.0
 - Added MFD firmware-upgrade profiles: -Xerox, -Kyocera and -GeneralMfd.
-  Each forces FAT32, applies a default label (XEROX-FW-UPGRADE,
-  KYOCERA-FW-UPGRADE, MFD-UPGRADE), and prints vendor-specific reminders.
+  Each forces FAT32, applies a default label (XEROX-FW,
+  KYOCERA-FW, MFD-UPGRADE), and prints vendor-specific reminders.
 - Advisory notifications: warns on drives larger than 8GB and 16GB, and on
-  USB 3.0+ (best-effort detection). Labels over the 11-char FAT32 limit are
-  truncated (the word UPGRADE is shortened).
+  USB 3.0+ (best-effort detection). Labels fit within the 11-char FAT32 limit.
 - Profiles are mutually exclusive with -Format (separate parameter sets).
 
 1.0.0

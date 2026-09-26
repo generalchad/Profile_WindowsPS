@@ -151,6 +151,19 @@ function Format-UsbDrive {
 
     $dryRun = [bool]$WhatIfPreference
 
+    # ---- Elevation gate -------------------------------------------------------
+    $elevated = Test-Elevation
+    if (-not $elevated) {
+        if (-not $dryRun) {
+            Write-Warning 'Format-UsbDrive requires an elevated session to format drives.'
+            Write-Host "  Relaunch with: $(Get-ElevationHint)" -ForegroundColor DarkGray
+            Write-Host '  Preview without elevation:   Format-UsbDrive -WhatIf' -ForegroundColor DarkGray
+            Write-Host '  Full help:                   Format-UsbDrive -Help' -ForegroundColor DarkGray
+            return
+        }
+        Write-Warning 'Not elevated - this is a preview only; an elevated session is required to format.'
+    }
+
     # ---- Profile resolution ---------------------------------------------------
     $profileName = switch ($PSCmdlet.ParameterSetName) {
         'Xerox'      { 'Xerox'; break }
@@ -161,11 +174,11 @@ function Format-UsbDrive {
 
     $profileMeta = @{
         Xerox      = @{
-            Label = 'XEROX-FW-UPGRADE'
+            Label = 'XEROX-FW'
             Notes = @('Place the .dlm firmware file in an "Upgrades" folder at the drive root.')
         }
         Kyocera    = @{
-            Label = 'KYOCERA-FW-UPGRADE'
+            Label = 'KYOCERA-FW'
             Notes = @('Newer Kyocera models support multi-model firmware via per-model folders; older models read firmware from the drive root.')
         }
         GeneralMfd = @{
@@ -182,7 +195,13 @@ function Format-UsbDrive {
 
     if ($Target) {
         foreach ($letter in $Target) {
-            $resolved.Add((Resolve-UsbDriveLetter -Letter $letter))
+            try {
+                $resolved.Add((Resolve-UsbDriveLetter -Letter $letter))
+            }
+            catch {
+                Write-Error $_.Exception.Message
+                return
+            }
         }
     }
     else {
@@ -215,21 +234,14 @@ function Format-UsbDrive {
         if ($oversized.Count -gt 0) {
             $labels = ($oversized | ForEach-Object { "$($_.DriveLetter): ($($_.SizeGB)GB)" }) -join ', '
             if ($profileName) {
-                throw ("$profileName MFD profiles require FAT32, which Windows cannot create on " +
+                Write-Error ("$profileName MFD profiles require FAT32, which Windows cannot create on " +
                     "partitions larger than 32GB. Affected: $labels. Use a drive 32GB or smaller.")
+                return
             }
-            throw ("FAT32 cannot be created on partitions larger than 32GB by Windows. " +
+            Write-Error ("FAT32 cannot be created on partitions larger than 32GB by Windows. " +
                 "Affected: $labels. Use -Format exFAT or -Format NTFS instead.")
+            return
         }
-    }
-
-    # ---- Elevation gate -------------------------------------------------------
-    $elevated = Test-Elevation
-    if (-not $elevated -and -not $dryRun) {
-        throw ("Format-UsbDrive requires an elevated session. Relaunch with: $(Get-ElevationHint)")
-    }
-    if (-not $elevated -and $dryRun) {
-        Write-Warning 'Not elevated - this is a preview only. Formatting requires an elevated session.'
     }
 
     # ---- Summary --------------------------------------------------------------
