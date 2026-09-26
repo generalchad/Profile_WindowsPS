@@ -29,14 +29,15 @@ function Set-WinTargetVersion {
         'TargetReleaseVersionInfo' = @{ Type = 'String'; Value = $TargetVersion }
     }
 
-    try {
-        # Test for admin rights
-        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")
-        if (-not $isAdmin) {
-            Write-Error "Administrator privileges are required to modify HKLM registry paths."
-            return
-        }
+    # Test for admin rights
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")
+    if (-not $isAdmin) {
+        Write-Warning "Set-WinTargetVersion: Administrator privileges are required to modify HKLM registry paths."
+        Write-Host "  Relaunch with: Start-Process pwsh -Verb RunAs" -ForegroundColor DarkGray
+        return
+    }
 
+    try {
         # Create registry path if it doesn't exist
         if (-not (Test-Path $registryPath)) {
             if ($PSCmdlet.ShouldProcess($registryPath, "Create registry key")) {
