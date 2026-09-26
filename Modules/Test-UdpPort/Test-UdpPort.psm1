@@ -70,7 +70,13 @@ function Test-UdpPort {
 
     begin {
         if (-not $PSBoundParameters.ContainsKey('Port') -and -not $Protocol) {
-            throw 'Either -Port or -Protocol is required.'
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                [System.ArgumentException]::new('Either -Port or -Protocol is required.'),
+                'MissingRequiredParameter',
+                [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                $null
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
         }
 
         # Build a raw probe from -Payload when no protocol handles it.
