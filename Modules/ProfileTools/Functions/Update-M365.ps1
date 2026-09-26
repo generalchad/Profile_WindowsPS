@@ -19,12 +19,16 @@ function Update-M365 {
     [CmdletBinding()]
     param (
         [Parameter(Position = 0)]
-        [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
         [string]$C2RClientPath = "C:\Program Files\Common Files\microsoft shared\ClickToRun\OfficeC2RClient.exe",
 
         [Parameter(Position = 1)]
         [string]$C2R_args = "/update user"
     )
+
+    if (-not (Test-Path -Path $C2RClientPath -PathType Leaf)) {
+        Write-Warning "Update-M365: Office Click-to-Run client not found at '$C2RClientPath'."
+        return
+    }
 
     $C2RClientName = [System.IO.Path]::GetFileName($C2RClientPath)
 

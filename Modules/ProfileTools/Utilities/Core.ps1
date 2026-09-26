@@ -252,8 +252,10 @@ function Update-PowerShell {
         Write-Host "PowerShell is out of date. Current version: $CurrentVersion. Latest version: $LatestVersion" -ForegroundColor Yellow
         $ConfirmUpdate = Read-Host "Do you want to update PowerShell? (Y/N)"
         if ($ConfirmUpdate.ToLower() -eq "y") {
-            if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())::IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-                Write-Error "Update-PowerShell: This function must be run as an administrator." -ErrorAction Continue
+            $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            if (-not $isAdmin) {
+                Write-Warning "Update-PowerShell: Administrator privileges are required to upgrade PowerShell."
+                Write-Host "  Relaunch with: Start-Process pwsh -Verb RunAs" -ForegroundColor DarkGray
                 return
             }
             winget upgrade -e --id="Microsoft.PowerShell" --accept-source-agreements --accept-package-agreements
