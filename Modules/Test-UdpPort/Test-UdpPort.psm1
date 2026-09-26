@@ -10,6 +10,19 @@ $script:GameRegistry = @{
     ArmaReforger   = @{ Port = 17777; Probe = 'valve' }  # fixed query port, game is 2001
     Dragonwilds    = @{ Port = 27015; Probe = 'valve' }  # Steam/UE5; A2S assumed, unverified
     ProjectZomboid = @{ Port = 16261; Probe = 'valve' }
+
+    # Steam/A2S titles
+    CS2             = @{ Port = 27015; Probe = 'valve' }
+    TeamFortress2   = @{ Port = 27015; Probe = 'valve' }
+    GarrysMod       = @{ Port = 27015; Probe = 'valve' }
+    Left4Dead2      = @{ Port = 27015; Probe = 'valve' }
+    Rust            = @{ Port = 28017; Probe = 'valve' }  # query port; game 28015, rcon 28016
+    Valheim         = @{ Port = 2456;  Probe = 'valve' }
+    Ark             = @{ Port = 27015; Probe = 'valve' }  # query port; game port is 7777
+    DayZ            = @{ Port = 2302;  Probe = 'valve' }
+    SevenDaysToDie  = @{ Port = 26900; Probe = 'valve' }
+    VRising         = @{ Port = 9876;  Probe = 'valve' }
+    SonsOfTheForest = @{ Port = 8766;  Probe = 'valve' }
 }
 
 function Test-UdpPort {
@@ -33,7 +46,8 @@ function Test-UdpPort {
     .PARAMETER Protocol
         A built-in game whose query packet and default port are used:
         Source, Quake, Minecraft, Samp, Palworld, Arma3, ArmaReforger,
-        Dragonwilds, ProjectZomboid.
+        Dragonwilds, ProjectZomboid, CS2, TeamFortress2, GarrysMod, Left4Dead2,
+        Rust, Valheim, Ark, DayZ, SevenDaysToDie, VRising, SonsOfTheForest.
 
     .PARAMETER Port
         The UDP port to test. Required unless -Protocol supplies a default.
@@ -53,7 +67,7 @@ function Test-UdpPort {
         [string[]]$ComputerName,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Source', 'Quake', 'Minecraft', 'Samp', 'Palworld', 'Arma3', 'ArmaReforger', 'Dragonwilds', 'ProjectZomboid')]
+        [ValidateSet('Source', 'Quake', 'Minecraft', 'Samp', 'Palworld', 'Arma3', 'ArmaReforger', 'Dragonwilds', 'ProjectZomboid', 'CS2', 'TeamFortress2', 'GarrysMod', 'Left4Dead2', 'Rust', 'Valheim', 'Ark', 'DayZ', 'SevenDaysToDie', 'VRising', 'SonsOfTheForest')]
         [string]$Protocol,
 
         [Parameter(Mandatory = $false)]
