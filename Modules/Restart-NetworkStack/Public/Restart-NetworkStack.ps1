@@ -272,8 +272,11 @@ function Restart-NetworkStack {
                 Write-Warning "Not elevated - this is a preview only. Running these steps requires: $(Get-ElevationHint)"
             }
             else {
-                throw ("Restart-NetworkStack requires an elevated session for the requested steps. " +
-                    "Relaunch with: $(Get-ElevationHint)")
+                Write-Warning 'Restart-NetworkStack requires an elevated session for the requested steps.'
+                Write-Host "  Relaunch with: $(Get-ElevationHint)" -ForegroundColor DarkGray
+                Write-Host '  Preview without elevation:   Restart-NetworkStack -WhatIf' -ForegroundColor DarkGray
+                Write-Host '  Safe DNS flush (unelevated): Restart-NetworkStack -Dns' -ForegroundColor DarkGray
+                return
             }
         }
         if ($doDns -and -not $elevated -and -not $dryRun) {
