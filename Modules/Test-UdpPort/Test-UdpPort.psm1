@@ -23,6 +23,13 @@ $script:GameRegistry = @{
     SevenDaysToDie  = @{ Port = 26900; Probe = 'valve' }
     VRising         = @{ Port = 9876;  Probe = 'valve' }
     SonsOfTheForest = @{ Port = 8766;  Probe = 'valve' }
+
+    # id Tech 3 (Quake3 getstatus) titles
+    EnemyTerritory    = @{ Port = 27960; Probe = 'quake' }
+    JediAcademy       = @{ Port = 29070; Probe = 'quake' }
+    MedalOfHonorAA    = @{ Port = 12203; Probe = 'quake' }
+    CallOfDuty4       = @{ Port = 28960; Probe = 'quake' }
+    SoldierOfFortune2 = @{ Port = 20100; Probe = 'quake' }
 }
 
 function Test-UdpPort {
@@ -47,7 +54,9 @@ function Test-UdpPort {
         A built-in game whose query packet and default port are used:
         Source, Quake, Minecraft, Samp, Palworld, Arma3, ArmaReforger,
         Dragonwilds, ProjectZomboid, CS2, TeamFortress2, GarrysMod, Left4Dead2,
-        Rust, Valheim, Ark, DayZ, SevenDaysToDie, VRising, SonsOfTheForest.
+        Rust, Valheim, Ark, DayZ, SevenDaysToDie, VRising, SonsOfTheForest,
+        EnemyTerritory, JediAcademy, MedalOfHonorAA, CallOfDuty4,
+        SoldierOfFortune2.
 
     .PARAMETER Port
         The UDP port to test. Required unless -Protocol supplies a default.
@@ -67,7 +76,7 @@ function Test-UdpPort {
         [string[]]$ComputerName,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Source', 'Quake', 'Minecraft', 'Samp', 'Palworld', 'Arma3', 'ArmaReforger', 'Dragonwilds', 'ProjectZomboid', 'CS2', 'TeamFortress2', 'GarrysMod', 'Left4Dead2', 'Rust', 'Valheim', 'Ark', 'DayZ', 'SevenDaysToDie', 'VRising', 'SonsOfTheForest')]
+        [ValidateSet('Source', 'Quake', 'Minecraft', 'Samp', 'Palworld', 'Arma3', 'ArmaReforger', 'Dragonwilds', 'ProjectZomboid', 'CS2', 'TeamFortress2', 'GarrysMod', 'Left4Dead2', 'Rust', 'Valheim', 'Ark', 'DayZ', 'SevenDaysToDie', 'VRising', 'SonsOfTheForest', 'EnemyTerritory', 'JediAcademy', 'MedalOfHonorAA', 'CallOfDuty4', 'SoldierOfFortune2')]
         [string]$Protocol,
 
         [Parameter(Mandatory = $false)]
