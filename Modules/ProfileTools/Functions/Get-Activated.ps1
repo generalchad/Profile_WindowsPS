@@ -19,8 +19,6 @@ function Get-Activated {
     try {
         Invoke-RestMethod $MASInstallerPath | Invoke-Expression
         Write-Verbose "Get-Activated: Successfully launched MAS installer."
-    } catch [System.Net.WebException] {
-        Write-Error "Get-Activated: Failed due to network error: $_"
     } catch {
         Write-Error "Get-Activated: Failed to launch MAS installer: $_"
     }
