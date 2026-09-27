@@ -35,6 +35,11 @@ function New-ScanShare {
     .PARAMETER ResetPassword
         Set -Password on an account that already exists.
 
+    .PARAMETER RemoteAddress
+        Remote IP address range(s) permitted for inbound SMB scans on the dedicated
+        firewall rule. Defaults to 'LocalSubnet'. Specify a subnet (e.g. '10.20.0.0/16')
+        or 'Any' if the MFP resides on a separate VLAN.
+
     .PARAMETER SkipFirewall
         Leave firewall rules untouched (e.g. when managed by Group Policy).
 
@@ -47,6 +52,12 @@ function New-ScanShare {
 
         Creates C:\Scans shared as \\<PC>\Scans for local user "scanner",
         prompting for the password.
+
+    .EXAMPLE
+        New-ScanShare -RemoteAddress '10.20.0.0/16'
+
+        Creates the scan share and scopes the dedicated firewall rule to allow
+        inbound copier scans from a separate printer VLAN (10.20.0.0/16).
 
     .EXAMPLE
         New-ScanShare -Path D:\Scans\Xerox -ShareName XeroxScans -UserName xerox -WhatIf
@@ -72,6 +83,9 @@ function New-ScanShare {
         [securestring]$Password,
 
         [switch]$ResetPassword,
+
+        [ValidateNotNullOrEmpty()]
+        [string[]]$RemoteAddress = @('LocalSubnet'),
 
         [switch]$SkipFirewall
     )
@@ -262,7 +276,17 @@ function New-ScanShare {
             $smbCandidateRules = @($candidateRules | Where-Object { $smbRuleNames.Contains($_.Name) })
             $plan = Get-SmbFirewallPlan -Rules $smbCandidateRules
 
-            if ($plan.Status -eq 'Exists') {
+            $needsAddressUpdate = $false
+            if ($plan.DedicatedRule -and $PSBoundParameters.ContainsKey('RemoteAddress')) {
+                $currentAddressFilter = $plan.DedicatedRule | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue
+                $currentAddresses = @($currentAddressFilter?.RemoteAddress)
+                $diff = Compare-Object $currentAddresses $RemoteAddress -SyncWindow 0
+                if ($diff) {
+                    $needsAddressUpdate = $true
+                }
+            }
+
+            if ($plan.Status -eq 'Exists' -and -not $needsAddressUpdate) {
                 & $addStep 'Firewall' 'Exists' 'SMB-In (TCP 445) enabled'
             }
             else {
@@ -287,7 +311,7 @@ function New-ScanShare {
                     if ($PSCmdlet.ShouldProcess("Inbound TCP 445 ($profDesc)", 'Create dedicated SMB scan firewall rule')) {
                         $null = New-NetFirewallRule -Name 'ScanShare-SMB-In' -DisplayName 'ScanShare SMB Inbound (TCP 445)' `
                             -Direction Inbound -Protocol TCP -LocalPort 445 -Profile $plan.DedicatedProfiles -Action Allow `
-                            -RemoteAddress LocalSubnet -ErrorAction Stop
+                            -RemoteAddress $RemoteAddress -ErrorAction Stop
                         $actions.Add('created dedicated SMB-In rule (TCP 445)')
                         $didWork = $true
                     }
@@ -295,15 +319,31 @@ function New-ScanShare {
                         $whatIfs.Add('would create dedicated SMB-In rule (TCP 445)')
                     }
                 }
-                elseif ($plan.DedicatedAction -eq 'Update') {
-                    $profDesc = $plan.DedicatedProfiles -join ', '
-                    if ($PSCmdlet.ShouldProcess("ScanShare-SMB-In ($profDesc)", 'Update dedicated firewall rule profiles')) {
-                        Set-NetFirewallRule -Name 'ScanShare-SMB-In' -Profile $plan.DedicatedProfiles -Enabled True -ErrorAction Stop
-                        $actions.Add('updated dedicated SMB-In rule profiles')
+                elseif ($plan.DedicatedAction -eq 'Update' -or ($plan.DedicatedRule -and $needsAddressUpdate)) {
+                    $profDesc = if ($plan.DedicatedProfiles.Count -gt 0) { $plan.DedicatedProfiles } else { $plan.DedicatedRule.Profile }
+                    $profDescStr = ($profDesc -split ',\s*' | Select-Object -Unique) -join ', '
+                    if ($PSCmdlet.ShouldProcess("ScanShare-SMB-In ($profDescStr)", 'Update dedicated firewall rule')) {
+                        $params = @{
+                            Name    = 'ScanShare-SMB-In'
+                            Enabled = 'True'
+                        }
+                        if ($plan.DedicatedProfiles.Count -gt 0) {
+                            $params['Profile'] = $plan.DedicatedProfiles
+                        }
+                        if ($needsAddressUpdate) {
+                            $params['RemoteAddress'] = $RemoteAddress
+                        }
+                        Set-NetFirewallRule @params -ErrorAction Stop
+                        $actions.Add('updated dedicated SMB-In rule')
                         $didWork = $true
                     }
                     else {
-                        $whatIfs.Add("would update dedicated SMB-In rule profiles to $profDesc")
+                        $updateDetail = if ($needsAddressUpdate) {
+                            "would update dedicated SMB-In rule (remote address: $($RemoteAddress -join ', '))"
+                        } else {
+                            "would update dedicated SMB-In rule profiles to $profDescStr"
+                        }
+                        $whatIfs.Add($updateDetail)
                     }
                 }
                 elseif ($plan.DedicatedAction -eq 'Enable') {

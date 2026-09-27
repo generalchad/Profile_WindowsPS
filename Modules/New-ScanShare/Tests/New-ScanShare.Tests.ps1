@@ -63,7 +63,19 @@ Test-Case 'Validates valid ShareName and UserName parameters' {
     $cmd = Get-Command New-ScanShare
     $paramShare = $cmd.Parameters['ShareName']
     $paramUser = $cmd.Parameters['UserName']
-    $null -ne $paramShare -and $null -ne $paramUser
+    $paramRemote = $cmd.Parameters['RemoteAddress']
+    $null -ne $paramShare -and $null -ne $paramUser -and $null -ne $paramRemote
+}
+
+Test-Case 'Rejects empty RemoteAddress' {
+    try {
+        New-ScanShare -RemoteAddress '' -WhatIf -ErrorAction Stop
+        $false
+    } catch [System.Management.Automation.ParameterBindingException] {
+        $true
+    } catch {
+        $false
+    }
 }
 
 Test-Case 'Rejects invalid characters in ShareName parameter metadata' {
