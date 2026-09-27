@@ -12,11 +12,12 @@ function New-ScanShare {
           3. NTFS Modify rights on the folder for that account.
           4. An SMB share granting the account Change access.
           5. The inbound "File and Printer Sharing (SMB-In)" firewall rules.
+          6. Verification: checks local SMB listener and validates credentialed
+             share access with a write/delete probe when password is available.
 
         Every step is idempotent - existing items are reused and only missing
         pieces are created - so it is safe to re-run to repair a half-working setup.
-        Finally it runs Test-FileShare against the share so the result is verified,
-        and prints the exact values to enter on the copier's address book.
+        Finally it prints the exact values to enter on the copier's address book.
 
     .PARAMETER Path
         Folder to receive scans. Created if missing. Defaults to C:\Scans.
@@ -45,7 +46,7 @@ function New-ScanShare {
 
     .OUTPUTS
         PSCustomObject with the share UNC path, account, local path, per-step
-        results and the Test-FileShare verification.
+        results (including Listener and Access checks) and the Test-FileShare verification.
 
     .EXAMPLE
         New-ScanShare
@@ -390,10 +391,56 @@ function New-ScanShare {
 
     # ---- 6. Verify ----------------------------------------------------------
     $verification = $null
-    if (-not $dryRun -and (Get-Command Test-FileShare -ErrorAction SilentlyContinue)) {
-        $verification = Test-FileShare -Hostname $env:COMPUTERNAME -PortList 445 -ForceSmb
-        $status = if ($verification.Status -eq 'OPEN') { 'Passed' } else { 'Failed' }
-        & $addStep 'Verify' $status "TCP 445 $($verification.Status) on $env:COMPUTERNAME"
+    if (-not $dryRun) {
+        if (Get-Command Test-FileShare -ErrorAction SilentlyContinue) {
+            $verification = Test-FileShare -Hostname $env:COMPUTERNAME -PortList 445 -ForceSmb
+            $vStatus = if ($verification) { @($verification.Status)[0] } else { $null }
+            $status = if ($vStatus -eq 'OPEN') { 'Passed' } else { 'Failed' }
+            & $addStep 'Listener' $status "TCP 445 $vStatus on $env:COMPUTERNAME"
+        }
+
+        $shareFailed = @($steps | Where-Object { $_.Step -eq 'Share' -and $_.Status -eq 'Failed' }).Count -gt 0
+        if ($shareFailed) {
+            & $addStep 'Access' 'Skipped' 'share creation failed'
+        }
+        elseif ($null -ne $Password -and $Password.Length -gt 0) {
+            $driveName = "ScanVerify_$([System.IO.Path]::GetRandomFileName() -replace '[^a-zA-Z0-9]','')"
+            $drive = $null
+            try {
+                $cred = [System.Management.Automation.PSCredential]::new($account, $Password)
+                $drive = New-PSDrive -Name $driveName -PSProvider FileSystem -Root "\\127.0.0.1\$ShareName" `
+                    -Credential $cred -Scope Local -ErrorAction Stop
+
+                $testFileName = ".scantest_$([System.IO.Path]::GetRandomFileName())"
+                $testPath = "${driveName}:\${testFileName}"
+                $null = New-Item -Path $testPath -ItemType File -Value 'ScanShare write test' -Force -ErrorAction Stop
+                if (Test-Path -LiteralPath $testPath) {
+                    Remove-Item -LiteralPath $testPath -Force -ErrorAction SilentlyContinue
+                    & $addStep 'Access' 'Passed' "authenticated and wrote test file via \\127.0.0.1\$ShareName"
+                }
+                else {
+                    & $addStep 'Access' 'Failed' 'could not verify test file creation'
+                }
+            }
+            catch {
+                $msg = $_.Exception.Message
+                if ($msg -match '1219') {
+                    $msg = 'conflicting network credentials cached by Windows (error 1219)'
+                }
+                elseif ($msg -match '1326') {
+                    $msg = 'logon failure: unknown user name or bad password'
+                }
+                & $addStep 'Access' 'Failed' $msg
+            }
+            finally {
+                if ($drive) {
+                    $null = Remove-PSDrive -Name $driveName -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        else {
+            & $addStep 'Access' 'Skipped' 'password not available in this session'
+        }
     }
 
     $failed = @($steps | Where-Object Status -eq 'Failed').Count
