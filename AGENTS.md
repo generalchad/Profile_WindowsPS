@@ -38,6 +38,7 @@ Personal PowerShell 7 profile. For architecture, load order, the load-time budge
 
 - **Target: PowerShell 7 only.** Modern syntax (`??`, `?.`, ternary) is fine.
   - *Exception:* `New-ScanShare` must also run on Windows PowerShell 5.1 (it is copied onto client PCs). No `??`, `?.`, `?:`, `&&`/`||` or other 7-only syntax there; run its tests under both `pwsh` and `powershell.exe -ExecutionPolicy Bypass`. Beware `$var?.Prop`: both versions parse it as a variable literally named `var?`.
+- **Cmdlet verbs:** every exported command must use a PowerShell-approved verb (from `Get-Verb`). Never invent a verb (`Do-`, `Run-`, `Load-`, …); choose the correct approved form (`Get-`, `Set-`, `New-`, `Test-`, `Invoke-`, …) so autoload, `Get-Command` discovery, and `-WhatIf`/`-Confirm` support stay consistent. Aliases are exempt.
 - **Errors:** use `$PSCmdlet.ThrowTerminatingError()` with an `ErrorRecord` instead of a raw `throw`. For missing elevation, warn and tell the user how to relaunch rather than throwing.
 - **Commits:** conventional commits scoped to the module or component (e.g. `feat(Test-UdpPort): …`, `fix(Settings): …`, `perf(profile): …`). Commits must be common-sense and granular:
   - *Atomic and focused:* one logical feature, fix, or optimization per commit. Never bundle unrelated modules, config changes, or refactors into a single catch-all commit.
