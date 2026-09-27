@@ -92,7 +92,7 @@ function Format-UsbDrive {
         Author   : GenChadT
         Requires : Administrator rights.
     #>
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium', DefaultParameterSetName = 'Custom')]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High', DefaultParameterSetName = 'Custom')]
     [OutputType([void])]
     param(
         [Parameter(Mandatory = $false)]
@@ -296,9 +296,7 @@ function Format-UsbDrive {
 
     if ($dryRun) {
         foreach ($t in $resolved) {
-            if ($PSCmdlet.ShouldProcess("$($t.DriveLetter):", "Format as $FileSystem")) {
-                Write-Host "  [WhatIf] Would format $($t.DriveLetter): as $FileSystem" -ForegroundColor DarkGray
-            }
+            Write-Host "  [WhatIf] Would format $($t.DriveLetter): as $FileSystem" -ForegroundColor DarkGray
         }
         Write-Host ''
         return
@@ -307,8 +305,7 @@ function Format-UsbDrive {
     # ---- Confirmation ---------------------------------------------------------
     if (-not $Force) {
         $drives = ($resolved | ForEach-Object { "$($_.DriveLetter):" }) -join ', '
-        $prompt = "Format $($resolved.Count) drive(s) ($drives) as $FileSystem and DESTROY all data on them?"
-        if (-not $PSCmdlet.ShouldContinue($prompt, 'Format-UsbDrive')) {
+        if (-not $PSCmdlet.ShouldProcess($drives, "Format as $FileSystem and destroy all data")) {
             Write-Host 'Cancelled - nothing was changed.' -ForegroundColor Cyan
             return
         }
@@ -316,8 +313,6 @@ function Format-UsbDrive {
 
     # ---- Format ---------------------------------------------------------------
     foreach ($t in $resolved) {
-        if (-not $PSCmdlet.ShouldProcess("$($t.DriveLetter):", "Format as $FileSystem")) { continue }
-
         Write-Host ('Formatting {0}: ({1} GB) as {2}...' -f $t.DriveLetter, $t.SizeGB, $FileSystem) -ForegroundColor Cyan
         try {
             $formatParams = @{
@@ -328,7 +323,7 @@ function Format-UsbDrive {
             }
             if ($label) { $formatParams['NewFileSystemLabel'] = $label }
 
-            Format-Volume @formatParams
+            $null = Format-Volume @formatParams
 
             Write-Host ('  Done: {0}: formatted as {1}' -f $t.DriveLetter, $FileSystem) -ForegroundColor Green
         }
