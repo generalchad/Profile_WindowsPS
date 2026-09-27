@@ -144,7 +144,7 @@ function Show-RenamePreview {
     $Height = try { $Host.UI.RawUI.WindowSize.Height } catch { 40 }
     if (-not $Height -or $Height -lt 10) { $Height = 40 }
 
-    if ($Lines.Count -gt ($Height - 4)) {
+    if (-not $NoPager -and $Lines.Count -gt ($Height - 4)) {
         # Custom pagination: no keybind text, silent Q handling.
         $Index = 0
         $PageSize = $Height - 2  # Reserve 2 lines for breathing room
