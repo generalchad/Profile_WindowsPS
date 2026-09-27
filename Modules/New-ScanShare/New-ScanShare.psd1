@@ -1,0 +1,29 @@
+@{
+    RootModule           = 'New-ScanShare.psm1'
+    ModuleVersion        = '0.1.0'
+    GUID                 = 'b735b035-cf82-4c2a-a47e-13783d33079e'
+    Author               = 'GenChadt'
+    CompanyName          = 'Unknown'
+    Copyright            = '(c) GenChadT. All rights reserved.'
+
+    Description          = 'Sets up an SMB scan-to-folder destination for an MFP in one step: local account, folder, NTFS and share permissions, and firewall rules, then verifies it with Test-FileShare. Idempotent and -WhatIf aware.'
+
+    PowerShellVersion    = '7.0'
+    CompatiblePSEditions = @('Core')
+
+    # Test-FileShare is used for the final verification but is optional: it is
+    # autoloaded when present and the step is skipped otherwise.
+    RequiredModules      = @()
+
+    FunctionsToExport    = @('New-ScanShare')
+    CmdletsToExport      = @()
+    VariablesToExport    = @()
+    AliasesToExport      = @()
+
+    PrivateData          = @{
+        PSData = @{
+            Tags       = @('SMB', 'Scan', 'MFP', 'Printer', 'Share', 'Troubleshooting', 'Windows')
+            ProjectUri = 'https://github.com/genchadt/Profile_WindowsPS'
+        }
+    }
+}
