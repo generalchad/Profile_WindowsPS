@@ -18,6 +18,10 @@ function Show-ScanShare {
         rendered from the object New-ScanShare returns, and the exact values to enter
         on the copier can be copied to the clipboard in one click.
 
+        Each field carries an inline hint, and the destination folder has a Browse
+        button that opens a directory picker. Quotation marks are not required in any
+        field; they would become part of the value.
+
         Windows Forms is loaded only when the dialog opens, so importing the module
         stays fast and headless sessions are unaffected.
 
@@ -44,7 +48,7 @@ function Show-ScanShare {
 
     $form = [System.Windows.Forms.Form]::new()
     $form.Text = 'New Scan Share'
-    $form.ClientSize = [System.Drawing.Size]::new(660, 650)
+    $form.ClientSize = [System.Drawing.Size]::new(660, 680)
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
     $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
     $form.MaximizeBox = $false
@@ -90,6 +94,24 @@ function Show-ScanShare {
         return $check
     }
 
+    function New-Hint {
+        param(
+            [Parameter(Mandatory)][string]$Text,
+            [Parameter(Mandatory)][int]$Top,
+            [Parameter()][int]$Width = 495,
+            [Parameter()][int]$Height = 18
+        )
+
+        $hint = [System.Windows.Forms.Label]::new()
+        $hint.Text = $Text
+        $hint.Location = [System.Drawing.Point]::new(152, $Top)
+        $hint.Size = [System.Drawing.Size]::new($Width, $Height)
+        $hint.ForeColor = [System.Drawing.Color]::DimGray
+        $form.Controls.Add($hint)
+
+        return $hint
+    }
+
     function New-Action {
         param(
             [Parameter(Mandatory)][string]$Text,
@@ -99,32 +121,56 @@ function Show-ScanShare {
 
         $button = [System.Windows.Forms.Button]::new()
         $button.Text = $Text
-        $button.Location = [System.Drawing.Point]::new($Left, 286)
+        $button.Location = [System.Drawing.Point]::new($Left, 348)
         $button.Size = [System.Drawing.Size]::new($Width, 28)
         $form.Controls.Add($button)
 
         return $button
     }
 
-    $txtPath = New-LabeledInput -Label 'Destination folder' -Top 18
+    $txtPath = New-LabeledInput -Label 'Destination folder' -Top 18 -Width 400
     $txtPath.Text = 'C:\Scans'
-    $txtShare = New-LabeledInput -Label 'Share name' -Top 50
+
+    $btnBrowse = [System.Windows.Forms.Button]::new()
+    $btnBrowse.Text = 'Browse...'
+    $btnBrowse.Location = [System.Drawing.Point]::new(560, 16)
+    $btnBrowse.Size = [System.Drawing.Size]::new(88, 25)
+    $form.Controls.Add($btnBrowse)
+
+    $btnBrowse.Add_Click({
+        $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
+        $dialog.Description = 'Select the scan destination folder'
+        $dialog.ShowNewFolderButton = $true
+        if (Test-Path -LiteralPath $txtPath.Text -PathType Container -ErrorAction SilentlyContinue) {
+            $dialog.SelectedPath = $txtPath.Text
+        }
+        try {
+            if ($dialog.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
+                $txtPath.Text = $dialog.SelectedPath
+            }
+        }
+        finally {
+            $dialog.Dispose()
+        }
+    })
+
+    $null = New-Hint -Top 44 -Text 'Full path (e.g. C:\Scans). Created if missing. Browse to pick a folder.'
+
+    $txtShare = New-LabeledInput -Label 'Share name' -Top 72
     $txtShare.Text = 'Scans'
-    $txtUser = New-LabeledInput -Label 'User name' -Top 82
+    $txtUser = New-LabeledInput -Label 'User name' -Top 104
     $txtUser.Text = 'scanner'
-    $txtPassword = New-LabeledInput -Label 'Password' -Top 114 -Width 300 -Password
-    $txtRemote = New-LabeledInput -Label 'Remote address' -Top 146
+    $txtPassword = New-LabeledInput -Label 'Password' -Top 136 -Width 300 -Password
 
-    $lblRemoteHint = [System.Windows.Forms.Label]::new()
-    $lblRemoteHint.Text = "Blank = LocalSubnet. Comma-separate ranges (e.g. 10.20.0.0/16) or 'Any'."
-    $lblRemoteHint.Location = [System.Drawing.Point]::new(152, 170)
-    $lblRemoteHint.Size = [System.Drawing.Size]::new(495, 18)
-    $lblRemoteHint.ForeColor = [System.Drawing.Color]::DimGray
-    $form.Controls.Add($lblRemoteHint)
+    $null = New-Hint -Top 164 -Height 34 -Text 'Quotation marks are not required. Share name: max 80 chars. User name: max 20 chars. Avoid \ / : * ? " < > | [ ] ; = + , @'
 
-    $chkReset = New-Option -Text 'Reset password of an existing account' -Top 198
-    $chkSkipFw = New-Option -Text 'Skip firewall changes (-SkipFirewall)' -Top 224
-    $chkSkipVerify = New-Option -Text 'Skip verification probes (-SkipVerification)' -Top 250
+    $txtRemote = New-LabeledInput -Label 'Remote address' -Top 202
+
+    $null = New-Hint -Top 226 -Height 32 -Text 'Optional. Source IP range allowed to scan. Blank = LocalSubnet; e.g. 10.20.0.0/16 or Any.'
+
+    $chkReset = New-Option -Text 'Reset password of an existing account' -Top 264
+    $chkSkipFw = New-Option -Text 'Skip firewall changes (-SkipFirewall)' -Top 290
+    $chkSkipVerify = New-Option -Text 'Skip verification probes (-SkipVerification)' -Top 316
 
     $btnPreview = New-Action -Text 'Preview' -Left 152
     $btnCreate = New-Action -Text 'Create' -Left 248
@@ -133,12 +179,12 @@ function Show-ScanShare {
     $btnClose = New-Action -Text 'Close' -Left 552
 
     $lblStatus = [System.Windows.Forms.Label]::new()
-    $lblStatus.Location = [System.Drawing.Point]::new(15, 324)
+    $lblStatus.Location = [System.Drawing.Point]::new(15, 384)
     $lblStatus.Size = [System.Drawing.Size]::new(630, 20)
 
     $txtResults = [System.Windows.Forms.TextBox]::new()
-    $txtResults.Location = [System.Drawing.Point]::new(15, 350)
-    $txtResults.Size = [System.Drawing.Size]::new(630, 285)
+    $txtResults.Location = [System.Drawing.Point]::new(15, 410)
+    $txtResults.Size = [System.Drawing.Size]::new(630, 255)
     $txtResults.Multiline = $true
     $txtResults.ReadOnly = $true
     $txtResults.ScrollBars = [System.Windows.Forms.ScrollBars]::Both
