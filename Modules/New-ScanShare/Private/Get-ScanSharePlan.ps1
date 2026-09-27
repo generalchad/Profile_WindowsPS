@@ -33,6 +33,16 @@ function Get-ScanSharePlan {
     .PARAMETER VerifyAvailable
         Whether Test-FileShare is available for the listener check.
 
+    .PARAMETER SkipVerification
+        Whether the listener and credentialed access probes are skipped.
+
+    .PARAMETER RemoteAddress
+        Remote IP address range(s) requested for the dedicated firewall rule.
+
+    .PARAMETER RemoteAddressSpecified
+        Whether -RemoteAddress was explicitly supplied (versus its default). When
+        true and a dedicated rule exists, the plan reflects an address update.
+
     .NOTES
         Private helper. Not exported. Best-effort: callers should tolerate failures.
     #>
@@ -44,9 +54,12 @@ function Get-ScanSharePlan {
         [Parameter()][string]$UserName,
         [Parameter()][string]$ShareName,
         [Parameter()][switch]$SkipFirewall,
+        [Parameter()][switch]$SkipVerification,
         [Parameter()][switch]$ResetPassword,
         [Parameter()][bool]$HasPassword,
-        [Parameter()][bool]$VerifyAvailable
+        [Parameter()][bool]$VerifyAvailable,
+        [Parameter()][string[]]$RemoteAddress,
+        [Parameter()][switch]$RemoteAddressSpecified
     )
 
     $items = [System.Collections.Generic.List[object]]::new()
@@ -129,7 +142,22 @@ function Get-ScanSharePlan {
     else {
         $candidates = Get-SmbFirewallCandidates
         $fwPlan = Get-SmbFirewallPlan -Rules $candidates
-        if ($fwPlan.Status -eq 'Exists') {
+
+        $needsAddressUpdate = $false
+        if ($RemoteAddressSpecified) {
+            $dedicatedRule = $candidates | Where-Object { $_.Name -eq 'ScanShare-SMB-In' } | Select-Object -First 1
+            if ($dedicatedRule) {
+                $addressFilter = $dedicatedRule | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue
+                $currentAddresses = @(if ($addressFilter) { $addressFilter.RemoteAddress })
+                $needsAddressUpdate = $currentAddresses.Count -eq 0 -or
+                    [bool](Compare-Object -ReferenceObject $currentAddresses -DifferenceObject $RemoteAddress)
+            }
+        }
+
+        if ($needsAddressUpdate) {
+            $items.Add([pscustomobject]@{ Step = 'Firewall'; Description = "Update dedicated SMB-In remote address to $($RemoteAddress -join ', ')" })
+        }
+        elseif ($fwPlan.Status -eq 'Exists') {
             $items.Add([pscustomobject]@{ Step = 'Firewall'; Description = 'No change (SMB-In already enabled)' })
         }
         else {
@@ -138,18 +166,24 @@ function Get-ScanSharePlan {
     }
 
     # Verification (listener + access)
-    if ($VerifyAvailable) {
-        $items.Add([pscustomobject]@{ Step = 'Listener'; Description = 'Check SMB listener (TCP 445)' })
+    if ($SkipVerification) {
+        $items.Add([pscustomobject]@{ Step = 'Listener'; Description = 'Skipped (-SkipVerification)' })
+        $items.Add([pscustomobject]@{ Step = 'Access'; Description = 'Skipped (-SkipVerification)' })
     }
     else {
-        $items.Add([pscustomobject]@{ Step = 'Listener'; Description = 'Skipped (Test-FileShare not installed)' })
-    }
+        if ($VerifyAvailable) {
+            $items.Add([pscustomobject]@{ Step = 'Listener'; Description = 'Check SMB listener (TCP 445)' })
+        }
+        else {
+            $items.Add([pscustomobject]@{ Step = 'Listener'; Description = 'Skipped (Test-FileShare not installed)' })
+        }
 
-    if ($HasPassword) {
-        $items.Add([pscustomobject]@{ Step = 'Access'; Description = "Write/delete a test file as $Account" })
-    }
-    else {
-        $items.Add([pscustomobject]@{ Step = 'Access'; Description = 'Skipped (no password available)' })
+        if ($HasPassword) {
+            $items.Add([pscustomobject]@{ Step = 'Access'; Description = "Write/delete a test file as $Account" })
+        }
+        else {
+            $items.Add([pscustomobject]@{ Step = 'Access'; Description = 'Skipped (no password available)' })
+        }
     }
 
     $items.ToArray()
