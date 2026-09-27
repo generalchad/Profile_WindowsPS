@@ -18,8 +18,19 @@ function Test-SmtpRelay {
 
     .PARAMETER Timeout
         The connection and read timeout in milliseconds. Defaults to 3000ms.
+
+    .OUTPUTS
+        PSCustomObject with TargetHost, IPAddress, Port, Status and Banner, one per
+        port. Interactive mode renders them as a table per host instead.
+
+    .EXAMPLE
+        Test-SmtpRelay microsoft
+
+    .EXAMPLE
+        'smtp.office365.com', 'gmail' | Test-SmtpRelay -PortList 587 | Where-Object Status -eq 'OPEN'
     #>
     [CmdletBinding()]
+    [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
         [string]$HOSTNAME,
@@ -98,8 +109,18 @@ function Test-SmtpRelay {
             catch {
                 Write-Host " [FAILED]" -ForegroundColor Red
                 Write-Host "   ! TIP: Check if the system has valid DNS Servers (e.g., 8.8.8.8) and Gateway.`n" -ForegroundColor DarkRed
+                foreach ($PORT in $Ports) {
+                    [PSCustomObject]@{
+                        TargetHost = $TargetHost
+                        IPAddress  = 'N/A'
+                        Port       = $PORT
+                        Status     = 'DNS_FAILED'
+                        Banner     = 'Error: Could not resolve hostname'
+                    }
+                }
                 return
             }
+            $PrimaryIP = $IPAddresses[0].IPAddressToString
 
             $SkipPort25 = $false
             $ExitNodeName = ""
@@ -122,13 +143,13 @@ function Test-SmtpRelay {
             # Heading matching 'Resolving DNS...' styling
             Write-Host "Testing Ports..." -ForegroundColor Cyan
 
-            $BatchResults = @()
-
             foreach ($PORT in $Ports) {
                 $ResultObject = [ordered]@{
-                    Port   = $PORT
-                    Status = "FAILED"
-                    Banner = ""
+                    TargetHost = $TargetHost
+                    IPAddress  = $PrimaryIP
+                    Port       = $PORT
+                    Status     = "FAILED"
+                    Banner     = ""
                 }
 
                 Write-Host "   Checking TCP Port $PORT... " -NoNewline -ForegroundColor Gray
@@ -138,7 +159,7 @@ function Test-SmtpRelay {
                     Write-Host $SkipLabel -ForegroundColor Yellow
                     $ResultObject.Status = "SKIPPED"
                     $ResultObject.Banner = "Blocked by Tailscale Policy"
-                    $BatchResults += [PSCustomObject]$ResultObject
+                    [PSCustomObject]$ResultObject
                     continue
                 }
 
@@ -175,6 +196,7 @@ function Test-SmtpRelay {
                             }
 
                             $ServerBanner = $Reader.ReadLine()
+                            $Prefix = if ($PORT -eq 465) { "[TLS] " } else { "" }
 
                             if (-not [string]::IsNullOrWhiteSpace($ServerBanner)) {
                                 $ResultObject.Banner = $Prefix + $ServerBanner.Trim()
@@ -209,11 +231,8 @@ function Test-SmtpRelay {
                     if ($tcpClient) { $tcpClient.Close(); $tcpClient.Dispose() }
                 }
 
-                $BatchResults += [PSCustomObject]$ResultObject
+                [PSCustomObject]$ResultObject
             }
-
-            # Directly pipe to Format-Table without extra Write-Host calls to maintain clean 1-line spacing
-            $BatchResults | Format-Table -AutoSize
         }
     }
 
@@ -228,7 +247,9 @@ function Test-SmtpRelay {
                 if ([string]::IsNullOrWhiteSpace($InputHost)) { continue }
                 if ($InputHost -match '^(exit|quit)$') { break }
 
-                & $RunCheck -TargetHost $InputHost -Ports $PortList -TimeoutMs $Timeout
+                # Rendered per host so each result table appears before the next prompt.
+                & $RunCheck -TargetHost $InputHost -Ports $PortList -TimeoutMs $Timeout |
+                    Format-Table -AutoSize | Out-Host
             }
         }
         elseif (-not [string]::IsNullOrWhiteSpace($HOSTNAME)) {
