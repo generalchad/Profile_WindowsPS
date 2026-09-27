@@ -20,7 +20,11 @@ function Invoke-Elevation {
 
     .PARAMETER CloseCurrent
         Exit the current (non-elevated) session after the elevated window has been
-        launched. Inside Windows Terminal this closes the tab.
+        launched. Inside Windows Terminal this closes the tab. Alias: -x.
+
+    .PARAMETER Close
+        Shorthand for -CloseCurrent as a positional value: pass the literal x
+        (e.g. Invoke-Elevation x) to close the current tab after launching.
 
     .EXAMPLE
         Invoke-Elevation
@@ -33,6 +37,11 @@ function Invoke-Elevation {
 
         Opens the elevated window and then closes the current tab.
 
+    .EXAMPLE
+        Invoke-Elevation x
+
+        Same as -CloseCurrent, using the bare positional shorthand.
+
     .NOTES
         Author  : GenChadt
         Requires: Windows. No-op (with a message) if the session is already elevated.
@@ -41,6 +50,11 @@ function Invoke-Elevation {
     [CmdletBinding()]
     [Alias('el')]
     param(
+        [Parameter(Position = 0)]
+        [ValidateSet('x')]
+        [string] $Close,
+
+        [Alias('x')]
         [switch] $CloseCurrent
     )
 
@@ -102,7 +116,7 @@ function Invoke-Elevation {
 
     Write-Host "Elevated window launched (PID $($process.Id))." -ForegroundColor Green
 
-    if ($CloseCurrent) {
+    if ($CloseCurrent -or $Close -eq 'x') {
         exit
     }
 }
