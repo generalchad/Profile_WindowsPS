@@ -47,7 +47,7 @@ time one of them is used.
 | `Format-UsbDrive` | Formats removable USB drives (<70 GB) to FAT32/exFAT/NTFS, with MFD firmware-upgrade profiles. |
 | `Get-NetworkDiagnostics` | One-shot site network triage: adapter state, DNS resolution, reachability, egress, and ticket export. |
 | `Get-PrinterInfo` | SNMP query of a printer/MFP: model, serial, page count, status, supply levels. No external tools. |
-| `New-ScanShare` | One-step SMB scan-to-folder setup (account, folder, ACLs, share, firewall), verified with Test-FileShare. |
+| `New-ScanShare` | One-step SMB scan-to-folder setup (account, folder, ACLs, share, firewall), verified with a listener check and a credentialed write probe. Runs on PS 7 and Windows PowerShell 5.1. |
 | `Optimize-PSX` | Extracts disc-image archives and compresses PS1/PS2, Saturn, and Dreamcast images to CHD. |
 | `Optimize-VMX` | Tunes VMware `.vmx` files for network stability and legacy-OS compatibility. |
 | `ProfileTools` | Personal toolbox: functions, utilities, and static aliases, including `Measure-ProfileLoad`. |

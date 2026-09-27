@@ -148,8 +148,8 @@ Test-Case '-WhatIf does not mutate file system or share state' {
 
 Test-Case '-ResetPassword with -WhatIf does not prompt for input' {
     # Existing local user (e.g. Administrator or Guest) should report WhatIf without blocking on Read-Host
-    $existingUser = (Get-LocalUser | Select-Object -First 1)?.Name
-    if (-not $existingUser) { $existingUser = 'Administrator' }
+    $firstUser = Get-LocalUser | Select-Object -First 1
+    $existingUser = if ($firstUser) { $firstUser.Name } else { 'Administrator' }
     $res = New-ScanShare -UserName $existingUser -ResetPassword -WhatIf
     $accountStep = $res.Steps | Where-Object Step -eq 'Account'
     $accountStep.Status -eq 'WhatIf'
