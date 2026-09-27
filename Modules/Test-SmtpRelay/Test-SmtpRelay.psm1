@@ -11,7 +11,9 @@ function Test-SmtpRelay {
 
     .PARAMETER HOSTNAME
         The target SMTP server FQDN or a known alias (e.g., microsoft, gmail, proofpoint, mimecast).
-        If omitted and no pipeline input is provided, the script enters interactive mode.
+        If omitted and no pipeline input is provided, the script enters interactive mode. There,
+        Ctrl+C or Esc cancels a running (e.g. hung) test and returns to the prompt; Ctrl+C at
+        the prompt itself, or typing 'exit', leaves interactive mode.
 
     .PARAMETER PortList
         An array of specific ports to test. Defaults to 25, 587, 465, 2525.
@@ -53,7 +55,10 @@ function Test-SmtpRelay {
         $InteractiveMode = (-not $PSBoundParameters.ContainsKey('HOSTNAME')) -and (-not $MyInvocation.ExpectingInput)
 
         $RunCheck = {
-            param($TargetHost, $Ports, $TimeoutMs)
+            # $Cancel is only supplied by interactive mode (see Invoke-CancellableCheck):
+            # a synchronized table whose Client entry lets another thread close the
+            # socket of the port currently being tested.
+            param($TargetHost, $Ports, $TimeoutMs, $Cancel)
 
             switch -Regex ($TargetHost) {
                 "^(gmail|google|gsuite|workspace)$"                                { $TargetHost = "smtp.gmail.com"; break }
@@ -144,6 +149,8 @@ function Test-SmtpRelay {
             Write-Host "Testing Ports..." -ForegroundColor Cyan
 
             foreach ($PORT in $Ports) {
+                if ($Cancel -and $Cancel.Cancelled) { break }
+
                 $ResultObject = [ordered]@{
                     TargetHost = $TargetHost
                     IPAddress  = $PrimaryIP
@@ -170,6 +177,7 @@ function Test-SmtpRelay {
 
                 try {
                     $tcpClient = New-Object System.Net.Sockets.TcpClient
+                    if ($Cancel) { $Cancel.Client = $tcpClient }
 
                     $connectAsync = $tcpClient.BeginConnect($TargetHost, $PORT, $null, $null)
                     if (-not $connectAsync.AsyncWaitHandle.WaitOne($TimeoutMs, $false)) {
@@ -239,6 +247,7 @@ function Test-SmtpRelay {
     process {
         if ($InteractiveMode) {
             Write-Host "Entering Interactive SMTP Test Mode. Type 'exit' to quit." -ForegroundColor Gray
+            Write-Host "Press Ctrl+C or Esc to cancel a running test." -ForegroundColor DarkGray
             while ($true) {
                 Write-Host -NoNewline "> " -ForegroundColor Green
                 $InputHost = Read-Host
@@ -247,15 +256,121 @@ function Test-SmtpRelay {
                 if ([string]::IsNullOrWhiteSpace($InputHost)) { continue }
                 if ($InputHost -match '^(exit|quit)$') { break }
 
-                # Rendered per host so each result table appears before the next prompt.
-                & $RunCheck -TargetHost $InputHost -Ports $PortList -TimeoutMs $Timeout |
-                    Format-Table -AutoSize | Out-Host
+                $run = Invoke-CancellableCheck -Check $RunCheck -Arguments @{
+                    TargetHost = $InputHost
+                    Ports      = $PortList
+                    TimeoutMs  = $Timeout
+                }
+                # Rendered per host so each result table appears before the next prompt;
+                # a cancelled run still shows the ports that finished.
+                if ($run.Results.Count) { $run.Results | Format-Table -AutoSize | Out-Host }
             }
         }
         elseif (-not [string]::IsNullOrWhiteSpace($HOSTNAME)) {
             & $RunCheck -TargetHost $HOSTNAME -Ports $PortList -TimeoutMs $Timeout
         }
     }
+}
+
+# Background checks that were cancelled but hadn't finished stopping yet (e.g.
+# blocked in DNS resolution, which can't be interrupted). Disposed once done.
+$script:PendingChecks = [System.Collections.Generic.List[object]]::new()
+
+function Invoke-CancellableCheck {
+    <#
+    .SYNOPSIS
+        Runs one interactive-mode host check so it can be cancelled with Ctrl+C/Esc.
+    .DESCRIPTION
+        Ctrl+C normally stops the whole pipeline, and PowerShell cannot resume a loop
+        after that, so it would end interactive mode rather than just the hung test.
+        Instead the check runs in a background runspace (sharing the host, so its
+        Write-Host output still appears) while this thread reads Ctrl+C/Esc as keys.
+
+        On cancel the current socket is closed, which makes a pending connect, TLS
+        handshake or banner read fail immediately instead of waiting out -Timeout.
+    .PARAMETER CancelRequested
+        Returns $true when the user asked to cancel. Defaults to reading the console;
+        overridable so cancellation can be exercised without a keyboard.
+    .OUTPUTS
+        PSCustomObject with Cancelled (bool) and Results (the objects the check
+        emitted before it finished or was cancelled).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [scriptblock]$Check,
+        [Parameter(Mandatory)] [hashtable]$Arguments,
+        [scriptblock]$CancelRequested = {
+            if ([Console]::IsInputRedirected) { return $false }
+            while ([Console]::KeyAvailable) {
+                $key = [Console]::ReadKey($true)
+                if ($key.Key -eq 'Escape') { return $true }
+                if ($key.Key -eq 'C' -and ($key.Modifiers -band [ConsoleModifiers]::Control)) { return $true }
+            }
+            $false
+        }
+    )
+
+    foreach ($done in @($script:PendingChecks | Where-Object { $_.Handle.IsCompleted })) {
+        $done.PowerShell.Dispose()
+        $done.Runspace.Dispose()
+        $null = $script:PendingChecks.Remove($done)
+    }
+
+    $cancel = [hashtable]::Synchronized(@{ Cancelled = $false; Client = $null })
+    $runspace = [runspacefactory]::CreateRunspace($Host)
+    $runspace.Open()
+    $ps = [powershell]::Create()
+    $ps.Runspace = $runspace
+    $null = $ps.AddScript($Check.ToString()).AddParameters($Arguments).AddParameter('Cancel', $cancel)
+    $output = [System.Management.Automation.PSDataCollection[psobject]]::new()
+    $handle = $ps.BeginInvoke([System.Management.Automation.PSDataCollection[psobject]]::new(), $output)
+
+    # Without this the console turns Ctrl+C into a pipeline stop before we can read it.
+    $restoreCtrlC = $null
+    try {
+        $restoreCtrlC = [Console]::TreatControlCAsInput
+        [Console]::TreatControlCAsInput = $true
+    }
+    catch { }
+
+    $cancelled = $false
+    try {
+        while (-not $handle.IsCompleted) {
+            if (& $CancelRequested) { $cancelled = $true; break }
+            $null = $handle.AsyncWaitHandle.WaitOne(50)
+        }
+    }
+    finally {
+        if ($null -ne $restoreCtrlC) { [Console]::TreatControlCAsInput = $restoreCtrlC }
+    }
+
+    if ($cancelled) {
+        $cancel.Cancelled = $true
+        # Stop before closing the socket: the stop takes effect at the check's next
+        # command, so the failure the socket close triggers never gets printed as a
+        # misleading [FAILED], and a late DNS reply can't write over the next prompt.
+        $null = $ps.BeginStop($null, $null)
+        $client = $cancel.Client
+        if ($client) { $client.Dispose() }
+        Write-Host ''
+        Write-Host '   [CANCELLED]' -ForegroundColor Yellow
+
+        if ($handle.AsyncWaitHandle.WaitOne(2000)) {
+            $ps.Dispose()
+            $runspace.Dispose()
+        }
+        else {
+            $script:PendingChecks.Add([pscustomobject]@{ PowerShell = $ps; Runspace = $runspace; Handle = $handle })
+        }
+    }
+    else {
+        try { $null = $ps.EndInvoke($handle) }
+        catch { Write-Warning "SMTP check failed: $($_.Exception.Message)" }
+        $ps.Dispose()
+        $runspace.Dispose()
+    }
+
+    [pscustomobject]@{ Cancelled = $cancelled; Results = @($output) }
 }
 
 # Export only the public function to the user's session
