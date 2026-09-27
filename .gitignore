@@ -55,3 +55,5 @@
 !Modules/Test-SmtpRelay/**
 !Modules/Test-UdpPort/
 !Modules/Test-UdpPort/**
+!Modules/Invoke-Elevation/
+!Modules/Invoke-Elevation/**

@@ -1,0 +1,35 @@
+@{
+    RootModule           = 'Invoke-Elevation.psm1'
+    ModuleVersion        = '1.0.0'
+    GUID                 = '3f2a9c1e-7d54-4a2b-9e0f-6c8b1d4a7e21'
+    Author               = 'GenChadt'
+    CompanyName          = 'Unknown'
+    Copyright            = '(c) GenChadT. All rights reserved.'
+
+    Description          = 'Relaunches the current Windows Terminal session as Administrator, reusing the same profile and working directory. Falls back to an elevated PowerShell host outside Windows Terminal.'
+
+    PowerShellVersion    = '5.1'
+    CompatiblePSEditions = @('Desktop', 'Core')
+
+    RequiredModules      = @()
+
+    FunctionsToExport    = @('Invoke-Elevation')
+    CmdletsToExport      = @()
+    VariablesToExport    = @()
+    AliasesToExport      = @('el')
+
+    PrivateData          = @{
+        PSData = @{
+            Tags         = @('Elevation', 'Administrator', 'RunAs', 'UAC', 'WindowsTerminal', 'Windows')
+            ProjectUri   = 'https://github.com/genchadt/Profile_WindowsPS'
+            ReleaseNotes = @'
+1.0.0
+- Initial release.
+- Relaunches the current Windows Terminal profile/directory elevated via wt.exe.
+- Falls back to an elevated pwsh/powershell host outside Windows Terminal.
+- -CloseCurrent exits the current session after the elevated window opens.
+- UAC cancellation reports a warning instead of throwing.
+'@
+        }
+    }
+}
