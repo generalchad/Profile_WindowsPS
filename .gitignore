@@ -23,6 +23,8 @@
 !Themes/**
 
 # 5. Specific Module Whitelist
+!Modules/Export-SiteReport/
+!Modules/Export-SiteReport/**
 !Modules/Find-NetworkDevice/
 !Modules/Find-NetworkDevice/**
 !Modules/Format-UsbDrive/
