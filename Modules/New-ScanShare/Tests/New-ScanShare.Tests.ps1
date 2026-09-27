@@ -320,7 +320,7 @@ Test-Case 'Firewall: -RemoteAddress change on existing dedicated rule plans an u
         function Get-NetFirewallRule {
             param([string]$Name, [string]$Direction, [string]$Group, [string]$DisplayGroup)
             if ($Name -eq 'ScanShare-SMB-In') {
-                [pscustomobject]@{ Name = 'ScanShare-SMB-In'; Profile = 'Domain, Private'; Enabled = 'True'; Action = 'Allow' }
+                [pscustomobject]@{ Name = 'ScanShare-SMB-In'; InstanceID = 'ScanShare-SMB-In'; Profile = 'Domain, Private'; Enabled = 'True'; Action = 'Allow' }
             }
         }
         function Get-NetFirewallPortFilter {
@@ -338,6 +338,26 @@ Test-Case 'Firewall: -RemoteAddress change on existing dedicated rule plans an u
     $fwStep = $res.Steps | Where-Object Step -eq 'Firewall'
     $fwStep.Status -eq 'WhatIf' -and
     $fwStep.Detail -like '*10.20.0.0/16*'
+}
+
+Test-Case 'Firewall candidates correlate by InstanceID when Name differs' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-NetFirewallRule {
+            param($Name, $Direction, $Group, $DisplayGroup)
+            if ($Name) {
+                [pscustomobject]@{ Name = 'Friendly-Name'; InstanceID = 'GUID-123'; Profile = 'Private'; Enabled = 'True'; Action = 'Allow' }
+            }
+        }
+        function Get-NetFirewallPortFilter {
+            process { [pscustomobject]@{ InstanceID = 'GUID-123'; LocalPort = '445' } }
+        }
+        Get-SmbFirewallCandidates
+    }
+    $candidates = & $mod.NewBoundScriptBlock($testBlock)
+
+    @($candidates).Count -eq 1 -and
+    $candidates[0].InstanceID -eq 'GUID-123'
 }
 
 # 7. NTFS Lockdown Planning
