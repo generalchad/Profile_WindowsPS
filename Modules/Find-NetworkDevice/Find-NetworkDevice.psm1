@@ -139,7 +139,7 @@ function Find-NetworkDevice {
         Maximum concurrent threads for the parallel ping sweep. Defaults to 64.
 
     .PARAMETER PingTimeoutMs
-        Ping response timeout per target in milliseconds. Defaults to 500.
+        Ping response timeout per target in milliseconds. Defaults to 1000.
 
     .PARAMETER ProbeTimeoutMs
         Timeout in milliseconds for port connect probes. Defaults to 1000.
