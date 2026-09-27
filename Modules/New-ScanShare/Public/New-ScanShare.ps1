@@ -151,6 +151,17 @@ function New-ScanShare {
 
     $Path = $resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 
+    if (-not (Get-Command Get-LocalUser -ErrorAction SilentlyContinue) -or
+        -not (Get-Command Get-SmbShare -ErrorAction SilentlyContinue)) {
+        $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+            [System.InvalidOperationException]::new("New-ScanShare needs the LocalAccounts and SmbShare modules, which are unavailable in this session. Use a 64-bit console: Windows PowerShell 5.1 x86 lacks LocalAccounts."),
+            'RequiredModuleUnavailable',
+            [System.Management.Automation.ErrorCategory]::NotInstalled,
+            $null
+        )
+        $PSCmdlet.ThrowTerminatingError($errorRecord)
+    }
+
     $dryRun = [bool]$WhatIfPreference
 
     if (-not (Test-Elevation) -and -not $dryRun) {
