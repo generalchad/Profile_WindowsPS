@@ -265,6 +265,36 @@ Test-Case 'Firewall plan: Updates existing dedicated rule when profile is missin
     @($plan.DedicatedProfiles) -contains 'Private'
 }
 
+Test-Case 'Firewall: -RemoteAddress change on existing dedicated rule plans an update' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Get-SmbShare { $null }
+        function Get-NetConnectionProfile { @() }
+        function Get-NetFirewallRule {
+            param([string]$Name, [string]$Direction, [string]$Group, [string]$DisplayGroup)
+            if ($Name -eq 'ScanShare-SMB-In') {
+                [pscustomobject]@{ Name = 'ScanShare-SMB-In'; Profile = 'Domain, Private'; Enabled = 'True'; Action = 'Allow' }
+            }
+        }
+        function Get-NetFirewallPortFilter {
+            process { [pscustomobject]@{ InstanceID = $_.Name; LocalPort = '445' } }
+        }
+        function Get-NetFirewallAddressFilter {
+            process { [pscustomobject]@{ RemoteAddress = 'LocalSubnet' } }
+        }
+        function Set-NetFirewallRule { throw 'Set-NetFirewallRule must not run under -WhatIf' }
+
+        New-ScanShare -Path 'C:\ScansFwTest' -RemoteAddress '10.20.0.0/16' -WhatIf
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $fwStep = $res.Steps | Where-Object Step -eq 'Firewall'
+    $fwStep.Status -eq 'WhatIf' -and
+    $fwStep.Detail -like '*10.20.0.0/16*'
+}
+
 # 7. Verification Steps (Listener and Access)
 Test-Case 'Verification: Listener checks local port and Access reports Skipped without password' {
     $mod = Get-Module New-ScanShare
