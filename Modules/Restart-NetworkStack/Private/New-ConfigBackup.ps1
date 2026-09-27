@@ -67,6 +67,9 @@ function Backup-IPConfiguration {
         }
 
         $dump = & netsh.exe int ip dump 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "netsh int ip dump failed with exit code $LASTEXITCODE."
+        }
         $dump | Out-File -FilePath $target -Encoding utf8 -ErrorAction Stop
 
         $sw.Stop()
@@ -154,9 +157,10 @@ function Backup-ProxyConfiguration {
         $lines.Add('--- HKCU Internet Settings ---')
         $regPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
         $reg = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
-        $lines.Add("ProxyEnable = $($reg.ProxyEnable)")
-        $lines.Add("ProxyServer = $($reg.ProxyServer)")
-        $lines.Add("AutoConfigURL = $($reg.AutoConfigURL)")
+        $regValue = { param($Name) if ($reg -and $reg.PSObject.Properties[$Name]) { $reg.$Name } else { '(not set)' } }
+        $lines.Add("ProxyEnable = $(& $regValue 'ProxyEnable')")
+        $lines.Add("ProxyServer = $(& $regValue 'ProxyServer')")
+        $lines.Add("AutoConfigURL = $(& $regValue 'AutoConfigURL')")
 
         $lines | Out-File -FilePath $target -Encoding utf8 -ErrorAction Stop
 
