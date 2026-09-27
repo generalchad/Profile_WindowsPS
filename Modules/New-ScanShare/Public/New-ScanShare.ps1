@@ -160,6 +160,25 @@ function New-ScanShare {
     Write-Host ''
     Write-Host "Scan-to-folder setup: \\$env:COMPUTERNAME\$ShareName -> $Path" -ForegroundColor Cyan
 
+    if (-not $dryRun) {
+        try {
+            $verifyAvailable = [bool](Get-Command Test-FileShare -ErrorAction SilentlyContinue)
+            $summary = Get-ScanSharePlan -Path $Path -Account $account -UserName $UserName -ShareName $ShareName `
+                -SkipFirewall:$SkipFirewall -ResetPassword:$ResetPassword `
+                -HasPassword ($null -ne $Password -and $Password.Length -gt 0) `
+                -VerifyAvailable $verifyAvailable
+            Write-Host ''
+            Write-Host 'Planned actions:' -ForegroundColor Cyan
+            foreach ($item in $summary) {
+                Write-Host ('  {0,-10} {1}' -f $item.Step, $item.Description) -ForegroundColor DarkGray
+            }
+            Write-Host ''
+        }
+        catch {
+            Write-Verbose "Summary unavailable: $($_.Exception.Message)"
+        }
+    }
+
     # ---- 1. Local account ---------------------------------------------------
     $user = Get-LocalUser -Name $UserName -ErrorAction SilentlyContinue
     try {
@@ -294,22 +313,7 @@ function New-ScanShare {
     }
     else {
         try {
-            $dedicated = Get-NetFirewallRule -Name 'ScanShare-SMB-In' -ErrorAction SilentlyContinue
-            $groupRules = Get-NetFirewallRule -Direction Inbound -Group '@FirewallAPI.dll,-28502' -ErrorAction SilentlyContinue
-            if (-not $groupRules) {
-                $groupRules = Get-NetFirewallRule -Direction Inbound -DisplayGroup 'File and Printer Sharing*' -ErrorAction SilentlyContinue
-            }
-
-            $candidateRules = @($dedicated | Where-Object { $null -ne $_ }) + @($groupRules | Where-Object { $null -ne $_ })
-            $portFilters = $candidateRules | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-            $smbRuleNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-            foreach ($pf in $portFilters) {
-                if ($pf.LocalPort -contains '445') {
-                    $null = $smbRuleNames.Add($pf.InstanceID)
-                }
-            }
-
-            $smbCandidateRules = @($candidateRules | Where-Object { $smbRuleNames.Contains($_.Name) })
+            $smbCandidateRules = Get-SmbFirewallCandidates
             $plan = Get-SmbFirewallPlan -Rules $smbCandidateRules
 
             $needsAddressUpdate = $false
