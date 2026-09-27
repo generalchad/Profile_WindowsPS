@@ -57,3 +57,5 @@
 !Modules/Test-UdpPort/**
 !Modules/Invoke-Elevation/
 !Modules/Invoke-Elevation/**
+!Modules/Get-CustomModule/
+!Modules/Get-CustomModule/**

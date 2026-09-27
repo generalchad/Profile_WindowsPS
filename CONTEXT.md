@@ -45,6 +45,7 @@ time one of them is used.
 | `Export-SiteReport` | Aggregates machine specs, print stack inventory, network printers, and network triage into a single job ticket document. |
 | `Find-NetworkDevice` | Subnet sweep discovery: MAC/OUI resolution, printer port probes, and pipeline to Get-PrinterInfo. |
 | `Format-UsbDrive` | Formats removable USB drives (<70 GB) to FAT32/exFAT/NTFS, with MFD firmware-upgrade profiles. |
+| `Get-CustomModule` | Lists the profile's custom modules with their version, description, and exported commands. |
 | `Get-NetworkDiagnostics` | One-shot site network triage: adapter state, DNS resolution, reachability, egress, and ticket export. |
 | `Get-PrinterInfo` | SNMP query of a printer/MFP: model, serial, page count, status, supply levels. No external tools. |
 | `Invoke-Elevation` | Relaunches the current Windows Terminal session elevated, reusing the same profile and working directory; falls back to an elevated PowerShell host outside Windows Terminal. |
@@ -78,6 +79,8 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
 
 ## Design notes
 
+- **Approved verbs only.** Exported commands use PowerShell-approved verbs from
+  `Get-Verb` (never invented verbs). See the rule in `AGENTS.md`.
 - **The `EDITOR` write is guarded.** A User/Machine-scope
   `[Environment]::SetEnvironmentVariable` broadcasts `WM_SETTINGCHANGE` to every
   top-level window and blocks on each — it once cost ~7 s per launch.
