@@ -100,6 +100,43 @@ Test-Case 'Rejects invalid characters in UserName parameter metadata' {
     }
 }
 
+Test-Case 'Defines short parameter aliases' {
+    $cmd = Get-Command New-ScanShare
+    $cmd.Parameters['Path'].Aliases -contains 'p' -and
+    $cmd.Parameters['ShareName'].Aliases -contains 'n' -and
+    $cmd.Parameters['UserName'].Aliases -contains 'u' -and
+    $cmd.Parameters['Password'].Aliases -contains 'w' -and
+    $cmd.Parameters['ResetPassword'].Aliases -contains 'rp' -and
+    $cmd.Parameters['RemoteAddress'].Aliases -contains 'ra' -and
+    $cmd.Parameters['SkipFirewall'].Aliases -contains 'sf'
+}
+
+Test-Case 'Defines positional order for Path, ShareName, UserName, Password' {
+    $cmd = Get-Command New-ScanShare
+    $position = @{}
+    foreach ($name in 'Path', 'ShareName', 'UserName', 'Password') {
+        $attr = $cmd.Parameters[$name].Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
+        $position[$name] = $attr.Position
+    }
+    $position['Path'] -eq 0 -and
+    $position['ShareName'] -eq 1 -and
+    $position['UserName'] -eq 2 -and
+    $position['Password'] -eq 3
+}
+
+Test-Case 'Binds positionally: path share user password' {
+    $res = New-ScanShare 'C:\Scans' 'XeroxScans' 'xerox' -WhatIf
+    $res.UncPath -eq "\\$env:COMPUTERNAME\XeroxScans" -and
+    $res.Account -eq "$env:COMPUTERNAME\xerox" -and
+    $res.Path -eq 'C:\Scans'
+}
+
+Test-Case 'Binds via short aliases -p -n -u' {
+    $res = New-ScanShare -p 'C:\Scans' -n 'XeroxScans' -u 'xerox' -WhatIf
+    $res.UncPath -eq "\\$env:COMPUTERNAME\XeroxScans" -and
+    $res.Account -eq "$env:COMPUTERNAME\xerox"
+}
+
 # 3. Path Normalization
 Test-Case 'Path normalizes trailing slash in -WhatIf simulation' {
     $res = New-ScanShare -Path 'C:\Scans\' -ShareName 'Scans' -WhatIf

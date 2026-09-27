@@ -23,30 +23,33 @@ function New-ScanShare {
 
     .PARAMETER Path
         Folder to receive scans. Created if missing. Defaults to C:\Scans.
+        Alias: -p. Position 0.
 
     .PARAMETER ShareName
-        SMB share name. Defaults to "Scans".
+        SMB share name. Defaults to "Scans". Alias: -n. Position 1.
 
     .PARAMETER UserName
         Local account the MFP authenticates as. Defaults to "scanner".
+        Alias: -u. Position 2.
 
     .PARAMETER Password
         Password for the account, as a SecureString or a plain string (converted
         internally). Prompted for when a new account is created and none is
         supplied. Ignored for an existing account unless -ResetPassword is given.
         A plain string is visible in the process list, so prefer a SecureString
-        for anything sensitive.
+        for anything sensitive. Alias: -w. Position 3.
 
     .PARAMETER ResetPassword
-        Set -Password on an account that already exists.
+        Set -Password on an account that already exists. Alias: -rp.
 
     .PARAMETER RemoteAddress
         Remote IP address range(s) permitted for inbound SMB scans on the dedicated
         firewall rule. Defaults to 'LocalSubnet'. Specify a subnet (e.g. '10.20.0.0/16')
-        or 'Any' if the MFP resides on a separate VLAN.
+        or 'Any' if the MFP resides on a separate VLAN. Alias: -ra.
 
     .PARAMETER SkipFirewall
         Leave firewall rules untouched (e.g. when managed by Group Policy).
+        Alias: -sf.
 
     .OUTPUTS
         PSCustomObject with the share UNC path, account, local path, per-step
@@ -57,6 +60,16 @@ function New-ScanShare {
 
         Creates C:\Scans shared as \\<PC>\Scans for local user "scanner",
         prompting for the password.
+
+    .EXAMPLE
+        New-ScanShare D:\Scans\Xerox XeroxScans xerox 'Morris123!'
+
+        Positional shorthand: path, share name, user name, then password.
+
+    .EXAMPLE
+        New-ScanShare -p D:\Scans\Xerox -n XeroxScans -u xerox -w 'Morris123!'
+
+        Same as the positional form, using the short parameter aliases.
 
     .EXAMPLE
         New-ScanShare -RemoteAddress '10.20.0.0/16'
@@ -90,22 +103,33 @@ function New-ScanShare {
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     [OutputType([pscustomobject])]
     param(
+        [Parameter(Position = 0)]
+        [Alias('p')]
         [ValidateNotNullOrEmpty()]
         [string]$Path = 'C:\Scans',
 
+        [Parameter(Position = 1)]
+        [Alias('n')]
         [ValidatePattern('^[^\\/:*?"<>|\[\];=+,]{1,80}$')]
         [string]$ShareName = 'Scans',
 
+        [Parameter(Position = 2)]
+        [Alias('u')]
         [ValidatePattern('^[^\\/"\[\]:|<>+=;,?*@]{1,20}$')]
         [string]$UserName = 'scanner',
 
+        [Parameter(Position = 3)]
+        [Alias('w')]
         [object]$Password,
 
+        [Alias('rp')]
         [switch]$ResetPassword,
 
+        [Alias('ra')]
         [ValidateNotNullOrEmpty()]
         [string[]]$RemoteAddress = @('LocalSubnet'),
 
+        [Alias('sf')]
         [switch]$SkipFirewall
     )
 
