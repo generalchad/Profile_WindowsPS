@@ -1,4 +1,4 @@
-# Requires -Version 7.6
+#Requires -Version 7.6
 # =====================================================================
 # Optimize-PSX - module loader
 #
@@ -47,6 +47,8 @@ foreach ($File in @($PrivateFiles + $PublicFiles)) {
         throw "Optimize-PSX: failed to import '$($File.FullName)': $_"
     }
 }
+
+Set-Alias -Name opsx -Value Optimize-PSX
 
 # Only the Public\ functions are exposed; everything in Private\ stays internal.
 Export-ModuleMember -Function $PublicFiles.BaseName -Alias 'opsx'
