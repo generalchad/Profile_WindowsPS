@@ -42,7 +42,10 @@ time one of them is used.
 | Module | Purpose |
 |--------|---------|
 | `Compress-Video` | Batch FFmpeg compression with GPU acceleration, resume/skip detection, and throttled parallelism. |
+| `Export-SiteReport` | Aggregates machine specs, print stack inventory, network printers, and network triage into a single job ticket document. |
+| `Find-NetworkDevice` | Subnet sweep discovery: MAC/OUI resolution, printer port probes, and pipeline to Get-PrinterInfo. |
 | `Format-UsbDrive` | Formats removable USB drives (<70 GB) to FAT32/exFAT/NTFS, with MFD firmware-upgrade profiles. |
+| `Get-NetworkDiagnostics` | One-shot site network triage: adapter state, DNS resolution, reachability, egress, and ticket export. |
 | `Get-PrinterInfo` | SNMP query of a printer/MFP: model, serial, page count, status, supply levels. No external tools. |
 | `New-ScanShare` | One-step SMB scan-to-folder setup (account, folder, ACLs, share, firewall), verified with Test-FileShare. |
 | `Optimize-PSX` | Extracts disc-image archives and compresses PS1/PS2, Saturn, and Dreamcast images to CHD. |
@@ -102,15 +105,7 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
 
 ## Remaining work
 
-- **oh-my-posh async init (~188 ms).** oh-my-posh 30.x init script supports a
-  trampoline (`$global:_ompAsyncInit`) that defers the full init until after the
-  first prompt renders. Worth evaluating; gate behind a flag.
-- **`POSH_SESSION_ID` is frozen in `omp.cache.ps1`.** The cache bakes in a single
-  session ID, so every shell shares one session (exit-code/timing cross-talk).
-  Should be regenerated per session, and the cache invalidated when the theme or
-  the `oh-my-posh --version` changes.
-- **History-filter regex** is substring-based; it can drop innocent commands like
-  `winget search token`. Consider tightening if that becomes annoying.
+- None currently pending. Profile optimizations (dynamic POSH_SESSION_ID per shell, theme/binary timestamp cache invalidation, OMP_ASYNC trampoline support, and tightened history filter regex) are resolved.
 
 ## Environment notes
 
