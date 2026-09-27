@@ -27,7 +27,7 @@
 !Modules/Compress-Video/
 !Modules/Compress-Video/**
 !Modules/Optimize-PSX/
-!Modules/Optimize-PSX/*
+!Modules/Optimize-PSX/**
 !Modules/Optimize-VMX/
 !Modules/Optimize-VMX/**
 !Modules/ProfileTools/
