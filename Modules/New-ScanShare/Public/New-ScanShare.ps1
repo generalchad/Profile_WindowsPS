@@ -51,6 +51,11 @@ function New-ScanShare {
         Leave firewall rules untouched (e.g. when managed by Group Policy).
         Alias: -sf.
 
+    .PARAMETER SkipVerification
+        Skip the listener check and the credentialed write/delete probe. Useful
+        when setup should not open a network connection or touch the share.
+        Alias: -sv.
+
     .OUTPUTS
         PSCustomObject with the share UNC path, account, local path, per-step
         results (including Listener and Access checks) and the Test-FileShare verification.
@@ -130,7 +135,10 @@ function New-ScanShare {
         [string[]]$RemoteAddress = @('LocalSubnet'),
 
         [Alias('sf')]
-        [switch]$SkipFirewall
+        [switch]$SkipFirewall,
+
+        [Alias('sv')]
+        [switch]$SkipVerification
     )
 
     if ($Password -is [string]) {
@@ -199,9 +207,10 @@ function New-ScanShare {
         try {
             $verifyAvailable = [bool](Get-Command Test-FileShare -ErrorAction SilentlyContinue)
             $summary = Get-ScanSharePlan -Path $Path -Account $account -UserName $UserName -ShareName $ShareName `
-                -SkipFirewall:$SkipFirewall -ResetPassword:$ResetPassword `
+                -SkipFirewall:$SkipFirewall -SkipVerification:$SkipVerification -ResetPassword:$ResetPassword `
                 -HasPassword ($null -ne $Password -and $Password.Length -gt 0) `
-                -VerifyAvailable $verifyAvailable
+                -VerifyAvailable $verifyAvailable `
+                -RemoteAddress $RemoteAddress -RemoteAddressSpecified:$PSBoundParameters.ContainsKey('RemoteAddress')
             Write-Host ''
             Write-Host 'Planned actions:' -ForegroundColor Cyan
             foreach ($item in $summary) {
@@ -461,54 +470,60 @@ function New-ScanShare {
     # ---- 6. Verify ----------------------------------------------------------
     $verification = $null
     if (-not $dryRun) {
-        if (Get-Command Test-FileShare -ErrorAction SilentlyContinue) {
-            $verification = Test-FileShare -Hostname $env:COMPUTERNAME -PortList 445 -ForceSmb
-            $vStatus = if ($verification) { @($verification.Status)[0] } else { $null }
-            $status = if ($vStatus -eq 'OPEN') { 'Passed' } else { 'Failed' }
-            & $addStep 'Listener' $status "TCP 445 $vStatus on $env:COMPUTERNAME"
-        }
-
-        $shareFailed = @($steps | Where-Object { $_.Step -eq 'Share' -and $_.Status -eq 'Failed' }).Count -gt 0
-        if ($shareFailed) {
-            & $addStep 'Access' 'Skipped' 'share creation failed'
-        }
-        elseif ($null -ne $Password -and $Password.Length -gt 0) {
-            $driveName = "ScanVerify_$([System.IO.Path]::GetRandomFileName() -replace '[^a-zA-Z0-9]','')"
-            $drive = $null
-            try {
-                $cred = [System.Management.Automation.PSCredential]::new($account, $Password)
-                $drive = New-PSDrive -Name $driveName -PSProvider FileSystem -Root "\\127.0.0.1\$ShareName" `
-                    -Credential $cred -Scope Local -ErrorAction Stop
-
-                $testFileName = ".scantest_$([System.IO.Path]::GetRandomFileName())"
-                $testPath = "${driveName}:\${testFileName}"
-                $null = New-Item -Path $testPath -ItemType File -Value 'ScanShare write test' -Force -ErrorAction Stop
-                if (Test-Path -LiteralPath $testPath) {
-                    Remove-Item -LiteralPath $testPath -Force -ErrorAction SilentlyContinue
-                    & $addStep 'Access' 'Passed' "authenticated and wrote test file via \\127.0.0.1\$ShareName"
-                }
-                else {
-                    & $addStep 'Access' 'Failed' 'could not verify test file creation'
-                }
-            }
-            catch {
-                $msg = $_.Exception.Message
-                if ($msg -match '1219') {
-                    $msg = 'conflicting network credentials cached by Windows (error 1219)'
-                }
-                elseif ($msg -match '1326') {
-                    $msg = 'logon failure: unknown user name or bad password'
-                }
-                & $addStep 'Access' 'Failed' $msg
-            }
-            finally {
-                if ($drive) {
-                    $null = Remove-PSDrive -Name $driveName -Force -ErrorAction SilentlyContinue
-                }
-            }
+        if ($SkipVerification) {
+            & $addStep 'Listener' 'Skipped' '-SkipVerification'
+            & $addStep 'Access' 'Skipped' '-SkipVerification'
         }
         else {
-            & $addStep 'Access' 'Skipped' 'password not available in this session'
+            if (Get-Command Test-FileShare -ErrorAction SilentlyContinue) {
+                $verification = Test-FileShare -Hostname $env:COMPUTERNAME -PortList 445 -ForceSmb
+                $vStatus = if ($verification) { @($verification.Status)[0] } else { $null }
+                $status = if ($vStatus -eq 'OPEN') { 'Passed' } else { 'Failed' }
+                & $addStep 'Listener' $status "TCP 445 $vStatus on $env:COMPUTERNAME"
+            }
+
+            $shareFailed = @($steps | Where-Object { $_.Step -eq 'Share' -and $_.Status -eq 'Failed' }).Count -gt 0
+            if ($shareFailed) {
+                & $addStep 'Access' 'Skipped' 'share creation failed'
+            }
+            elseif ($null -ne $Password -and $Password.Length -gt 0) {
+                $driveName = "ScanVerify_$([System.IO.Path]::GetRandomFileName() -replace '[^a-zA-Z0-9]','')"
+                $drive = $null
+                try {
+                    $cred = [System.Management.Automation.PSCredential]::new($account, $Password)
+                    $drive = New-PSDrive -Name $driveName -PSProvider FileSystem -Root "\\127.0.0.1\$ShareName" `
+                        -Credential $cred -Scope Local -ErrorAction Stop
+
+                    $testFileName = ".scantest_$([System.IO.Path]::GetRandomFileName())"
+                    $testPath = "${driveName}:\${testFileName}"
+                    $null = New-Item -Path $testPath -ItemType File -Value 'ScanShare write test' -Force -ErrorAction Stop
+                    if (Test-Path -LiteralPath $testPath) {
+                        Remove-Item -LiteralPath $testPath -Force -ErrorAction SilentlyContinue
+                        & $addStep 'Access' 'Passed' "authenticated and wrote test file via \\127.0.0.1\$ShareName"
+                    }
+                    else {
+                        & $addStep 'Access' 'Failed' 'could not verify test file creation'
+                    }
+                }
+                catch {
+                    $msg = $_.Exception.Message
+                    if ($msg -match '1219') {
+                        $msg = 'conflicting network credentials cached by Windows (error 1219)'
+                    }
+                    elseif ($msg -match '1326') {
+                        $msg = 'logon failure: unknown user name or bad password'
+                    }
+                    & $addStep 'Access' 'Failed' $msg
+                }
+                finally {
+                    if ($drive) {
+                        $null = Remove-PSDrive -Name $driveName -Force -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+            else {
+                & $addStep 'Access' 'Skipped' 'password not available in this session'
+            }
         }
     }
 

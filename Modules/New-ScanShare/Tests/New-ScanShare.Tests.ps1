@@ -108,7 +108,8 @@ Test-Case 'Defines short parameter aliases' {
     $cmd.Parameters['Password'].Aliases -contains 'w' -and
     $cmd.Parameters['ResetPassword'].Aliases -contains 'rp' -and
     $cmd.Parameters['RemoteAddress'].Aliases -contains 'ra' -and
-    $cmd.Parameters['SkipFirewall'].Aliases -contains 'sf'
+    $cmd.Parameters['SkipFirewall'].Aliases -contains 'sf' -and
+    $cmd.Parameters['SkipVerification'].Aliases -contains 'sv'
 }
 
 Test-Case 'Defines positional order for Path, ShareName, UserName, Password' {
@@ -534,6 +535,27 @@ Test-Case 'Summary: flags share path mismatch and skips firewall' {
     $listener.Description -like '*Skipped*Test-FileShare*'
 }
 
+Test-Case 'Summary: reports Skipped verification when -SkipVerification' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-LocalUser { $null }
+        function Test-Path { $false }
+        function Get-SmbShare { $null }
+        function Get-SmbFirewallCandidates { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists' } }
+
+        Get-ScanSharePlan -Path 'C:\Scans' -Account 'PC\scanner' -UserName 'scanner' -ShareName 'Scans' `
+            -SkipVerification -HasPassword $true -VerifyAvailable $true
+    }
+    $plan = & $mod.NewBoundScriptBlock($testBlock)
+
+    $listener = $plan | Where-Object Step -eq 'Listener'
+    $access = $plan | Where-Object Step -eq 'Access'
+
+    $listener.Description -like '*Skipped*SkipVerification*' -and
+    $access.Description -like '*Skipped*SkipVerification*'
+}
+
 # 9. Verification Steps (Listener and Access)
 Test-Case 'Verification: Listener checks local port and Access reports Skipped without password' {
     $mod = Get-Module New-ScanShare
@@ -636,6 +658,41 @@ Test-Case 'Verification: Access formats error 1219 gracefully' {
     $accessStep = $res.Steps | Where-Object Step -eq 'Access'
     $accessStep.Status -eq 'Failed' -and
     $accessStep.Detail -like '*conflicting network credentials*'
+}
+
+Test-Case 'Verification: -SkipVerification records Skipped for Listener and Access' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Test-Path { $true }
+        function Get-Acl {
+            [pscustomobject]@{
+                Access = @([pscustomobject]@{
+                    IdentityReference = [pscustomobject]@{ Value = "$env:COMPUTERNAME\scanner" }
+                    AccessControlType = 'Allow'
+                    FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify
+                })
+            }
+        }
+        function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = 'Everyone'; AccessControlType = 'Allow'; AccessRight = 'Full' } }
+        function Get-NetFirewallRule { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
+        function Get-NetConnectionProfile { @() }
+        function Test-FileShare { [pscustomobject]@{ Status = 'OPEN'; Target = $env:COMPUTERNAME; Port = 445 } }
+
+        New-ScanShare -Path 'C:\Scans' -SkipFirewall -SkipVerification
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $listenerStep = $res.Steps | Where-Object Step -eq 'Listener'
+    $accessStep = $res.Steps | Where-Object Step -eq 'Access'
+
+    $listenerStep.Status -eq 'Skipped' -and
+    $listenerStep.Detail -eq '-SkipVerification' -and
+    $accessStep.Status -eq 'Skipped' -and
+    $accessStep.Detail -eq '-SkipVerification'
 }
 
 # 10. Summary
