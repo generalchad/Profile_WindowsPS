@@ -286,11 +286,9 @@ function New-ScanShare {
             $needsAddressUpdate = $false
             if ($plan.DedicatedRule -and $PSBoundParameters.ContainsKey('RemoteAddress')) {
                 $currentAddressFilter = $plan.DedicatedRule | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue
-                $currentAddresses = @($currentAddressFilter?.RemoteAddress)
-                $diff = Compare-Object $currentAddresses $RemoteAddress -SyncWindow 0
-                if ($diff) {
-                    $needsAddressUpdate = $true
-                }
+                $currentAddresses = @(if ($currentAddressFilter) { $currentAddressFilter.RemoteAddress })
+                $needsAddressUpdate = $currentAddresses.Count -eq 0 -or
+                    [bool](Compare-Object -ReferenceObject $currentAddresses -DifferenceObject $RemoteAddress)
             }
 
             if ($plan.Status -eq 'Exists' -and -not $needsAddressUpdate) {
