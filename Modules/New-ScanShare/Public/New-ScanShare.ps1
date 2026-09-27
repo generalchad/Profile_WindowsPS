@@ -8,13 +8,16 @@ function New-ScanShare {
 
           1. A local account for the MFP to authenticate as (password never expires,
              cannot be changed by the account).
-          2. The destination folder.
-          3. Locks the folder's NTFS permissions to SYSTEM, Administrators, and the
+          2. Hardens that account so it only works for SMB network logon: interactive,
+             Remote Desktop, batch-job, and service logons are denied, and a reused
+             account found in a privileged group aborts the setup.
+          3. The destination folder.
+          4. Locks the folder's NTFS permissions to SYSTEM, Administrators, and the
              scan account (Modify), removing inherited broad entries.
-          4. An SMB share open to Everyone with Full Control (access is limited by
+          5. An SMB share open to Everyone with Full Control (access is limited by
              the folder's NTFS permissions).
-          5. The inbound "File and Printer Sharing (SMB-In)" firewall rules.
-          6. Verification: checks local SMB listener and validates credentialed
+          6. The inbound "File and Printer Sharing (SMB-In)" firewall rules.
+          7. Verification: checks local SMB listener and validates credentialed
              share access with a write/delete probe when password is available.
 
         Every step is idempotent - existing items are reused and only missing
@@ -41,6 +44,12 @@ function New-ScanShare {
 
     .PARAMETER ResetPassword
         Set -Password on an account that already exists. Alias: -rp.
+
+    .PARAMETER SkipAccountHardening
+        Leave the account's logon rights untouched. Use when user-rights assignments
+        are managed by Group Policy. This also skips the privileged-group check, so a
+        reused account in Administrators (etc.) no longer aborts the setup.
+        Alias: -sah.
 
     .PARAMETER RemoteAddress
         Remote IP address range(s) permitted for inbound SMB scans on the dedicated
@@ -87,9 +96,20 @@ function New-ScanShare {
 
         Shows every change that would be made without applying any of them.
 
+    .EXAMPLE
+        New-ScanShare -SkipAccountHardening
+
+        Creates the scan share but leaves logon rights untouched, for environments
+        where user-rights assignments are enforced by Group Policy.
+
     .NOTES
         Requires elevation. The account is local to this PC; on the copier use
         "<PC name>\<UserName>" (or just the user name on most models) as the login.
+
+        The account may authenticate only over SMB. Interactive, Remote Desktop,
+        batch-job, and service logons are denied via the local security policy; a
+        reused account already in a privileged group (Administrators, Backup
+        Operators, Remote Desktop Users, ...) stops setup before the share exists.
 
         The scan folder's NTFS permissions are locked down to SYSTEM (Full control),
         Administrators (Full control), and the scan account (Modify). Inherited broad
@@ -129,6 +149,9 @@ function New-ScanShare {
 
         [Alias('rp')]
         [switch]$ResetPassword,
+
+        [Alias('sah')]
+        [switch]$SkipAccountHardening,
 
         [Alias('ra')]
         [ValidateNotNullOrEmpty()]
@@ -208,6 +231,7 @@ function New-ScanShare {
             $verifyAvailable = [bool](Get-Command Test-FileShare -ErrorAction SilentlyContinue)
             $summary = Get-ScanSharePlan -Path $Path -Account $account -UserName $UserName -ShareName $ShareName `
                 -SkipFirewall:$SkipFirewall -SkipVerification:$SkipVerification -ResetPassword:$ResetPassword `
+                -SkipAccountHardening:$SkipAccountHardening `
                 -HasPassword ($null -ne $Password -and $Password.Length -gt 0) `
                 -VerifyAvailable $verifyAvailable `
                 -RemoteAddress $RemoteAddress -RemoteAddressSpecified:$PSBoundParameters.ContainsKey('RemoteAddress')
@@ -268,7 +292,44 @@ function New-ScanShare {
         return [pscustomobject]@{ UncPath = $null; Account = $account; Path = $Path; Steps = $steps.ToArray(); Verification = $null }
     }
 
-    # ---- 2. Folder ----------------------------------------------------------
+    # ---- 1b. Account logon hardening ----------------------------------------
+    if ($SkipAccountHardening) {
+        & $addStep 'Hardening' 'Skipped' '-SkipAccountHardening'
+    }
+    else {
+        try {
+            if ($dryRun) {
+                & $addStep 'Hardening' 'WhatIf' "would deny interactive, RDP, batch and service logon for $account"
+            }
+            else {
+                $hardening = Get-ScanShareAccountHardeningPlan -Account $account -UserName $UserName
+
+                # A reused account in a privileged group is not a scan account. Refuse
+                # to expose the share rather than hand out a credential with that power.
+                if (@($hardening.PrivilegedGroups).Count -gt 0) {
+                    $groups = $hardening.PrivilegedGroups -join ', '
+                    & $addStep 'Hardening' 'Failed' "$account is a member of privileged group(s): $groups. Use a dedicated account."
+                    return [pscustomobject]@{ UncPath = $null; Account = $account; Path = $Path; Steps = $steps.ToArray(); Verification = $null }
+                }
+                elseif (-not $hardening.NeedsHardening) {
+                    & $addStep 'Hardening' 'Exists' 'interactive/RDP/batch/service logon denied'
+                }
+                elseif ($PSCmdlet.ShouldProcess($account, 'Deny interactive, RDP, batch and service logon')) {
+                    Add-LocalAccountRight -AccountName $account -Right $hardening.MissingRights
+                    & $addStep 'Hardening' 'Updated' "denied $($hardening.MissingRights -join ', ')"
+                }
+                else {
+                    & $addStep 'Hardening' 'WhatIf' 'would deny interactive, RDP, batch and service logon'
+                }
+            }
+        }
+        catch {
+            & $addStep 'Hardening' 'Failed' $_.Exception.Message
+            return [pscustomobject]@{ UncPath = $null; Account = $account; Path = $Path; Steps = $steps.ToArray(); Verification = $null }
+        }
+    }
+
+    # ---- 3. Folder ----------------------------------------------------------
     try {
         if (Test-Path -LiteralPath $Path -PathType Container) {
             & $addStep 'Folder' 'Exists' $Path
@@ -283,7 +344,7 @@ function New-ScanShare {
         & $addStep 'Folder' 'Failed' $_.Exception.Message
     }
 
-    # ---- 3. NTFS permissions ------------------------------------------------
+    # ---- 4. NTFS permissions ------------------------------------------------
     try {
         if (Test-Path -LiteralPath $Path -PathType Container) {
             $acl = Get-Acl -LiteralPath $Path
@@ -322,7 +383,7 @@ function New-ScanShare {
         & $addStep 'NTFS' 'Failed' $_.Exception.Message
     }
 
-    # ---- 4. SMB share -------------------------------------------------------
+    # ---- 5. SMB share -------------------------------------------------------
     try {
         $share = Get-SmbShare -Name $ShareName -ErrorAction SilentlyContinue
         if ($share) {
@@ -354,7 +415,7 @@ function New-ScanShare {
         & $addStep 'Share' 'Failed' $_.Exception.Message
     }
 
-    # ---- 5. Firewall --------------------------------------------------------
+    # ---- 6. Firewall --------------------------------------------------------
     if ($SkipFirewall) {
         & $addStep 'Firewall' 'Skipped' '-SkipFirewall'
     }
@@ -467,7 +528,7 @@ function New-ScanShare {
         }
     }
 
-    # ---- 6. Verify ----------------------------------------------------------
+    # ---- 7. Verify ----------------------------------------------------------
     $verification = $null
     if (-not $dryRun) {
         if ($SkipVerification) {

@@ -27,6 +27,9 @@ function Get-ScanSharePlan {
     .PARAMETER ResetPassword
         Whether -ResetPassword was requested.
 
+    .PARAMETER SkipAccountHardening
+        Whether -SkipAccountHardening was requested, leaving logon rights untouched.
+
     .PARAMETER HasPassword
         Whether a password is available for the credentialed access probe.
 
@@ -56,6 +59,7 @@ function Get-ScanSharePlan {
         [Parameter()][switch]$SkipFirewall,
         [Parameter()][switch]$SkipVerification,
         [Parameter()][switch]$ResetPassword,
+        [Parameter()][switch]$SkipAccountHardening,
         [Parameter()][bool]$HasPassword,
         [Parameter()][bool]$VerifyAvailable,
         [Parameter()][string[]]$RemoteAddress,
@@ -82,6 +86,24 @@ function Get-ScanSharePlan {
         $accountDesc = "No change ($Account already exists)"
     }
     $items.Add([pscustomobject]@{ Step = 'Account'; Description = $accountDesc })
+
+    # Account hardening
+    if ($SkipAccountHardening) {
+        $items.Add([pscustomobject]@{ Step = 'Hardening'; Description = 'Skipped (-SkipAccountHardening)' })
+    }
+    else {
+        $hardening = Get-ScanShareAccountHardeningPlan -Account $Account -UserName $UserName
+        if (@($hardening.PrivilegedGroups).Count -gt 0) {
+            $hardeningDesc = "FAIL: $Account is a member of $($hardening.PrivilegedGroups -join ', ')"
+        }
+        elseif ($hardening.NeedsHardening) {
+            $hardeningDesc = "Deny interactive, RDP, batch and service logon for $Account"
+        }
+        else {
+            $hardeningDesc = "No change ($Account logon rights already restricted)"
+        }
+        $items.Add([pscustomobject]@{ Step = 'Hardening'; Description = $hardeningDesc })
+    }
 
     # Folder
     $folderExists = [bool](Test-Path -LiteralPath $Path -PathType Container)
