@@ -26,9 +26,8 @@ function Invoke-NativeCommand {
         Exit codes to treat as success. Defaults to 0. Some netsh operations return
         non-zero on benign conditions (e.g. nothing to reset), so callers can widen this.
 
-    .PARAMETER WhatIfPreferenceOverride
-        Set by the caller (usually $PSCmdlet.ShouldProcess result) to indicate the
-        command must not actually run.
+    .PARAMETER DryRun
+        When set, the command is not executed and the step is reported as WhatIf.
 
     .NOTES
         Private helper. Not exported.
