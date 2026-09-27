@@ -150,7 +150,10 @@ function Compress-Video {
         $effectiveSkipLog      = if ($PSBoundParameters.ContainsKey('SkipLog')) { [bool]$SkipLog } else { [bool]$config['SkipLog'] }
         $tolerance             = [double]$config['ResumeDurationTolerance']
 
-        if (-not (Test-FFTools)) { return }
+        # A return in begin only ends begin; process and end still run for every
+        # input, so they need this flag to skip work when ffmpeg is unavailable.
+        $toolsMissing = -not (Test-FFTools)
+        if ($toolsMissing) { return }
 
         $encoderInfo = Get-HardwareEncoder -HardwareAccel $effectiveHwAccel
         $encoderLabel = if ($encoderInfo.IsHardware) { "GPU hardware encoder" } else { "CPU software encoder" }
@@ -175,7 +178,7 @@ function Compress-Video {
                 if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
                 $logFile = Join-Path $logDir "CompressVideo_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 
-                Start-Transcript -Path $logFile -Append -IncludeInvocationHeader -ErrorAction SilentlyContinue
+                Start-Transcript -Path $logFile -Append -IncludeInvocationHeader -ErrorAction Stop | Out-Null
                 $script:LoggingActive = $true
             } catch {
                 Write-Warning "Could not start transcript. Logging disabled."
@@ -186,7 +189,7 @@ function Compress-Video {
     }
 
     process {
-        if ($Help) { return }
+        if ($Help -or $toolsMissing) { return }
 
         try {
             $resolvedInput = (Resolve-Path $InputFilePath -ErrorAction Stop).Path
@@ -329,7 +332,7 @@ function Compress-Video {
     }
 
     end {
-        if ($Help) { return }
+        if ($Help -or $toolsMissing) { return }
 
         Write-CompressionSummary -Stats $pipelineStats
 
