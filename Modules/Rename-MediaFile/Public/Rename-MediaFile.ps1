@@ -47,7 +47,7 @@ function Rename-MediaFile {
         Language applied when detection fails. Unset by default, which leaves the sidecar untagged.
     .PARAMETER RemoveJunkFiles
         Queue known scene litter (RARBG.txt, "Downloaded from...", sample files) for removal.
-        .nfo files are never treated as junk because Jellyfin and Kodi read them as metadata.
+        Note: .nfo files are never treated as junk because Jellyfin and Kodi read them as metadata.
     .PARAMETER PermanentDelete
         Delete junk outright instead of sending it to the Recycle Bin.
     .PARAMETER NoPager
