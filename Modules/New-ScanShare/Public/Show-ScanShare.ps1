@@ -48,9 +48,18 @@ function Show-ScanShare {
 
     [System.Windows.Forms.Application]::EnableVisualStyles()
 
+    # Hover hints. WinForms has no per-control "hint" property; a shared ToolTip is
+    # the supported mechanism, and it is the only guidance available for the
+    # checkboxes, whose purpose is not obvious from the label alone.
+    $toolTip = [System.Windows.Forms.ToolTip]::new()
+    $toolTip.AutoPopDelay = 30000
+    $toolTip.InitialDelay = 400
+    $toolTip.ReshowDelay = 100
+    $toolTip.ShowAlways = $true
+
     $form = [System.Windows.Forms.Form]::new()
     $form.Text = 'New Scan Share'
-    $form.ClientSize = [System.Drawing.Size]::new(660, 680)
+    $form.ClientSize = [System.Drawing.Size]::new(660, 706)
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
     $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
     $form.MaximizeBox = $false
@@ -123,7 +132,7 @@ function Show-ScanShare {
 
         $button = [System.Windows.Forms.Button]::new()
         $button.Text = $Text
-        $button.Location = [System.Drawing.Point]::new($Left, 348)
+        $button.Location = [System.Drawing.Point]::new($Left, 374)
         $button.Size = [System.Drawing.Size]::new($Width, 28)
         $form.Controls.Add($button)
 
@@ -132,12 +141,14 @@ function Show-ScanShare {
 
     $txtPath = New-LabeledInput -Label 'Destination folder' -Top 18 -Width 400
     $txtPath.Text = 'C:\Scans'
+    $toolTip.SetToolTip($txtPath, 'Full path that receives scans, e.g. C:\Scans. Created if missing. It must be a dedicated subfolder, not a drive root such as C:\.')
 
     $btnBrowse = [System.Windows.Forms.Button]::new()
     $btnBrowse.Text = 'Browse...'
     $btnBrowse.Location = [System.Drawing.Point]::new(560, 16)
     $btnBrowse.Size = [System.Drawing.Size]::new(88, 25)
     $form.Controls.Add($btnBrowse)
+    $toolTip.SetToolTip($btnBrowse, 'Pick an existing folder, or create one, as the scan destination.')
 
     $btnBrowse.Add_Click({
         $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
@@ -160,35 +171,49 @@ function Show-ScanShare {
 
     $txtShare = New-LabeledInput -Label 'Share name' -Top 72
     $txtShare.Text = 'Scans'
+    $toolTip.SetToolTip($txtShare, 'Name the copier connects to (default "Scans"). Up to 80 characters; avoid \ / : * ? " < > | [ ] ; = + ,')
     $txtUser = New-LabeledInput -Label 'User name' -Top 104
     $txtUser.Text = 'scanner'
+    $toolTip.SetToolTip($txtUser, 'Local account the copier signs in as. Up to 20 characters; avoid \ / " [ ] : | < > + = ; , ? * @')
     $txtPassword = New-LabeledInput -Label 'Password' -Top 136 -Width 300 -Password
+    $toolTip.SetToolTip($txtPassword, 'Password for that account. Required for a new or reset account: Windows blocks network (SMB) logons for accounts with blank passwords.')
 
     $null = New-Hint -Top 164 -Height 34 -Text 'Quotation marks are not required. Share name: max 80 chars. User name: max 20 chars. Avoid \ / : * ? " < > | [ ] ; = + , @'
 
     $txtRemote = New-LabeledInput -Label 'Remote address' -Top 202
+    $toolTip.SetToolTip($txtRemote, 'Optional. Source IP range allowed to reach SMB port 445. Blank = LocalSubnet; use a subnet such as 10.20.0.0/16, or Any to allow every network.')
 
     $null = New-Hint -Top 226 -Height 32 -Text 'Optional. Source IP range allowed to scan. Blank = LocalSubnet; e.g. 10.20.0.0/16 or Any.'
 
     $chkReset = New-Option -Text 'Reset password of an existing account' -Top 264
-    $chkSkipFw = New-Option -Text 'Skip firewall changes (-SkipFirewall)' -Top 290
-    $chkSkipVerify = New-Option -Text 'Skip verification probes (-SkipVerification)' -Top 316
+    $toolTip.SetToolTip($chkReset, 'Sets a new password on an account that already exists. Leave clear to reuse the account and its current password.')
+    $chkSkipHardening = New-Option -Text 'Skip account hardening (-SkipAccountHardening)' -Top 290
+    $toolTip.SetToolTip($chkSkipHardening, 'Leaves logon rights untouched. Use only when user-rights assignments are managed by Group Policy. Without this, the scan account is denied interactive, Remote Desktop, batch and service logon, and a reused account in a privileged group stops the setup.')
+    $chkSkipFw = New-Option -Text 'Skip firewall changes (-SkipFirewall)' -Top 316
+    $toolTip.SetToolTip($chkSkipFw, 'Leaves Windows Firewall untouched. Use when the SMB inbound rules are managed by Group Policy.')
+    $chkSkipVerify = New-Option -Text 'Skip verification probes (-SkipVerification)' -Top 342
+    $toolTip.SetToolTip($chkSkipVerify, 'Skips the SMB listener test and the credentialed write/delete test. Use when setup must not open a network connection or touch the share.')
 
     $btnPreview = New-Action -Text 'Preview' -Left 152
+    $toolTip.SetToolTip($btnPreview, 'Runs the dry run (New-ScanShare -WhatIf) and shows the planned steps. Works without elevation and makes no changes.')
     $btnCreate = New-Action -Text 'Create' -Left 248
+    $toolTip.SetToolTip($btnCreate, 'Performs the real setup. Requires elevation; if the session is not elevated you are offered a relaunch.')
     $btnCopy = New-Action -Text 'Copy settings' -Left 344 -Width 110
     $btnCopy.Enabled = $false
+    $toolTip.SetToolTip($btnCopy, 'Copies the host, share path, account and protocol to the clipboard for entry on the copier.')
     $btnHelp = New-Action -Text "$([char]0x2139)  Help" -Left 462 -Width 80
     $btnHelp.Font = [System.Drawing.Font]::new('Segoe UI Symbol', 9)
+    $toolTip.SetToolTip($btnHelp, 'Open the setup guide.')
     $btnClose = New-Action -Text 'Close' -Left 552
+    $toolTip.SetToolTip($btnClose, 'Close the dialog.')
 
     $lblStatus = [System.Windows.Forms.Label]::new()
-    $lblStatus.Location = [System.Drawing.Point]::new(15, 384)
+    $lblStatus.Location = [System.Drawing.Point]::new(15, 410)
     $lblStatus.Size = [System.Drawing.Size]::new(630, 20)
 
     $txtResults = [System.Windows.Forms.TextBox]::new()
-    $txtResults.Location = [System.Drawing.Point]::new(15, 410)
-    $txtResults.Size = [System.Drawing.Size]::new(630, 255)
+    $txtResults.Location = [System.Drawing.Point]::new(15, 436)
+    $txtResults.Size = [System.Drawing.Size]::new(630, 250)
     $txtResults.Multiline = $true
     $txtResults.ReadOnly = $true
     $txtResults.ScrollBars = [System.Windows.Forms.ScrollBars]::Both
@@ -212,7 +237,8 @@ function Show-ScanShare {
     $collectSplat = {
         Get-ScanShareGuiSplat -Path $txtPath.Text -ShareName $txtShare.Text -UserName $txtUser.Text `
             -Password $txtPassword.Text -RemoteAddress $txtRemote.Text `
-            -ResetPassword:$chkReset.Checked -SkipFirewall:$chkSkipFw.Checked -SkipVerification:$chkSkipVerify.Checked
+            -ResetPassword:$chkReset.Checked -SkipAccountHardening:$chkSkipHardening.Checked `
+            -SkipFirewall:$chkSkipFw.Checked -SkipVerification:$chkSkipVerify.Checked
     }
 
     $btnPreview.Add_Click({
@@ -319,7 +345,10 @@ WHAT THIS DOES
   Creates everything an office copier needs to scan to a folder on this PC:
   a local account for the copier, the destination folder, locked-down NTFS
   permissions, an SMB share, and the firewall rules that allow the scan.
-  Every step is safe to re-run: existing pieces are reused, not duplicated.
+  The account is hardened so it works only over SMB: interactive, Remote
+  Desktop, batch and service logons are denied, so a leaked password cannot
+  be used to sign in at the console or run a service. Every step is safe to
+  re-run: existing pieces are reused, not duplicated.
 
 HOW TO USE THIS DIALOG
   1. Fill in the fields (the defaults work for a first setup).
@@ -356,6 +385,12 @@ FIELDS
 OPTIONS
   Reset password of an existing account
       Sets a new password on an account that already exists.
+  Skip account hardening
+      Leaves logon rights untouched (use when user rights are managed by
+      Group Policy). Without this, the scan account is denied interactive,
+      Remote Desktop, batch and service logon, and a reused account already
+      in a privileged group (Administrators, Backup Operators, ...) stops
+      the setup before the share is created.
   Skip firewall changes
       Leaves Windows Firewall untouched (use when rules are managed by
       Group Policy).
@@ -380,6 +415,9 @@ IF SOMETHING FAILS
         Set-NetConnectionProfile -NetworkCategory Private
   - Account or password login errors on the copier: confirm the account is
     enabled and the password matches; re-run with "Reset password" checked.
+  - "Hardening" step fails because the account is in a privileged group: the
+    account is not safe to use as a scanner login. Choose a dedicated user
+    name, or tick "Skip account hardening" if user rights are GPO-managed.
 
 Verification uses Test-FileShare when it is available; without it the
 Listener step is skipped automatically.

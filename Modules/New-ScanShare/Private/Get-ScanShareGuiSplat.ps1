@@ -27,6 +27,9 @@ function Get-ScanShareGuiSplat {
     .PARAMETER ResetPassword
         Whether -ResetPassword should be passed.
 
+    .PARAMETER SkipAccountHardening
+        Whether -SkipAccountHardening should be passed.
+
     .PARAMETER SkipFirewall
         Whether -SkipFirewall should be passed.
 
@@ -48,6 +51,7 @@ function Get-ScanShareGuiSplat {
         [Parameter()][string]$Password,
         [Parameter()][string]$RemoteAddress,
         [Parameter()][switch]$ResetPassword,
+        [Parameter()][switch]$SkipAccountHardening,
         [Parameter()][switch]$SkipFirewall,
         [Parameter()][switch]$SkipVerification
     )
@@ -68,6 +72,7 @@ function Get-ScanShareGuiSplat {
     }
 
     if ($ResetPassword) { $splat['ResetPassword'] = $true }
+    if ($SkipAccountHardening) { $splat['SkipAccountHardening'] = $true }
     if ($SkipFirewall) { $splat['SkipFirewall'] = $true }
     if ($SkipVerification) { $splat['SkipVerification'] = $true }
 

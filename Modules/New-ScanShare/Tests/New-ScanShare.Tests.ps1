@@ -118,6 +118,7 @@ Test-Case 'Defines short parameter aliases' {
     $cmd.Parameters['UserName'].Aliases -contains 'u' -and
     $cmd.Parameters['Password'].Aliases -contains 'w' -and
     $cmd.Parameters['ResetPassword'].Aliases -contains 'rp' -and
+    $cmd.Parameters['SkipAccountHardening'].Aliases -contains 'sah' -and
     $cmd.Parameters['RemoteAddress'].Aliases -contains 'ra' -and
     $cmd.Parameters['SkipFirewall'].Aliases -contains 'sf' -and
     $cmd.Parameters['SkipVerification'].Aliases -contains 'sv'
@@ -421,6 +422,8 @@ Test-Case 'Share: grants Everyone Full Control on an existing share' {
     $mod = Get-Module New-ScanShare
     $testBlock = {
         function Test-Elevation { $true }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
         function Test-Path { $true }
         function Get-Acl {
@@ -459,6 +462,8 @@ Test-Case 'Summary: reports create vs reuse intents per step' {
     $mod = Get-Module New-ScanShare
     $testBlock = {
         function Get-LocalUser { $null }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Test-Path { $false }
         function Get-SmbShare { $null }
         function Get-SmbFirewallCandidates { @() }
@@ -490,6 +495,8 @@ Test-Case 'Summary: reports no-change when folder and account already exist' {
     $mod = Get-Module New-ScanShare
     $testBlock = {
         function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Test-Path { $true }
         function Get-Acl {
             [pscustomobject]@{
@@ -527,6 +534,8 @@ Test-Case 'Summary: flags share path mismatch and skips firewall' {
     $mod = Get-Module New-ScanShare
     $testBlock = {
         function Get-LocalUser { $null }
+        function Get-LocalAccountRight { @() }
+        function Get-LocalGroupMember { @() }
         function Test-Path { $false }
         function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'D:\Other' } }
         function Get-SmbFirewallCandidates { @() }
@@ -550,6 +559,8 @@ Test-Case 'Summary: reports Skipped verification when -SkipVerification' {
     $mod = Get-Module New-ScanShare
     $testBlock = {
         function Get-LocalUser { $null }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Test-Path { $false }
         function Get-SmbShare { $null }
         function Get-SmbFirewallCandidates { @() }
@@ -572,6 +583,8 @@ Test-Case 'Verification: Listener checks local port and Access reports Skipped w
     $mod = Get-Module New-ScanShare
     $testBlock = {
         function Test-Elevation { $true }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
         function Test-Path { $true }
         function Get-Acl {
@@ -607,6 +620,8 @@ Test-Case 'Verification: Access writes probe file when password supplied' {
     $testBlock = {
         $secPass = ConvertTo-SecureString 'TestPass123!' -AsPlainText -Force
         function Test-Elevation { $true }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
         function Test-Path { $true }
         function Get-Acl {
@@ -643,6 +658,8 @@ Test-Case 'Verification: Access formats error 1219 gracefully' {
     $testBlock = {
         $secPass = ConvertTo-SecureString 'TestPass123!' -AsPlainText -Force
         function Test-Elevation { $true }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
         function Test-Path { $true }
         function Get-Acl {
@@ -675,6 +692,8 @@ Test-Case 'Verification: -SkipVerification records Skipped for Listener and Acce
     $mod = Get-Module New-ScanShare
     $testBlock = {
         function Test-Elevation { $true }
+        function Get-LocalAccountRight { @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight') }
+        function Get-LocalGroupMember { @() }
         function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
         function Test-Path { $true }
         function Get-Acl {
@@ -711,7 +730,7 @@ Test-Case 'GUI splat: converts password, splits remote addresses, sets switches'
     $mod = Get-Module New-ScanShare
     $splat = & $mod.NewBoundScriptBlock({
         Get-ScanShareGuiSplat -Path ' D:\Scans\Xerox ' -ShareName 'XeroxScans' -UserName 'xerox' `
-            -Password 'Morris123!' -RemoteAddress '10.20.0.0/16, 10.21.0.0/16' -ResetPassword -SkipFirewall
+            -Password 'Morris123!' -RemoteAddress '10.20.0.0/16, 10.21.0.0/16' -ResetPassword -SkipAccountHardening -SkipFirewall
     })
     $splat.Path -eq 'D:\Scans\Xerox' -and
     $splat.ShareName -eq 'XeroxScans' -and
@@ -720,6 +739,7 @@ Test-Case 'GUI splat: converts password, splits remote addresses, sets switches'
     @($splat.RemoteAddress).Count -eq 2 -and
     $splat.RemoteAddress -contains '10.21.0.0/16' -and
     $splat.ResetPassword -eq $true -and
+    $splat.SkipAccountHardening -eq $true -and
     $splat.SkipFirewall -eq $true -and
     -not $splat.ContainsKey('SkipVerification')
 }
@@ -730,6 +750,7 @@ Test-Case 'GUI splat: omits blank optional fields' {
     -not $splat.ContainsKey('Password') -and
     -not $splat.ContainsKey('RemoteAddress') -and
     -not $splat.ContainsKey('ResetPassword') -and
+    -not $splat.ContainsKey('SkipAccountHardening') -and
     $splat.Count -eq 3
 }
 
@@ -787,7 +808,98 @@ Test-Case 'Result formatter: handles null result (unelevated early return)' {
     $render.Summary -eq '' -and $render.Text -like '*No result*'
 }
 
-# 11. Summary
+# 11. Account Logon Hardening
+Test-Case 'Hardening plan: detects missing rights and a privileged group' {
+    $mod = Get-Module New-ScanShare
+    $plan = & $mod.NewBoundScriptBlock({
+        param($rights, $groups)
+        Get-ScanShareAccountHardeningPlan -Account "$env:COMPUTERNAME\scanner" -UserName 'scanner' `
+            -CurrentRights $rights -AccountGroups $groups
+    }) @('SeDenyInteractiveLogonRight') @('Administrators')
+
+    $plan.NeedsHardening -and
+    @($plan.MissingRights).Count -eq 3 -and
+    @($plan.MissingRights) -notcontains 'SeDenyInteractiveLogonRight' -and
+    @($plan.PrivilegedGroups) -contains 'Administrators' -and
+    $plan.RightsKnown
+}
+
+Test-Case 'Hardening plan: no change when all deny rights hold and no privileged group' {
+    $mod = Get-Module New-ScanShare
+    $plan = & $mod.NewBoundScriptBlock({
+        param($rights)
+        Get-ScanShareAccountHardeningPlan -Account 'PC\scanner' -UserName 'scanner' `
+            -CurrentRights $rights -AccountGroups @()
+    }) @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')
+
+    -not $plan.NeedsHardening -and
+    @($plan.MissingRights).Count -eq 0 -and
+    @($plan.PrivilegedGroups).Count -eq 0 -and
+    $plan.RightsKnown
+}
+
+Test-Case 'Hardening: -WhatIf plans restrictions without reading the policy' {
+    $mod = Get-Module New-ScanShare
+    $res = & $mod.NewBoundScriptBlock({
+        function Get-LocalAccountRight { throw 'rights must not be read under -WhatIf' }
+        New-ScanShare -Path 'C:\Scans' -UserName 'scanner' -WhatIf
+    })
+    $step = $res.Steps | Where-Object Step -eq 'Hardening'
+    $step.Status -eq 'WhatIf' -and $step.Detail -like '*interactive*'
+}
+
+Test-Case 'Hardening: -SkipAccountHardening records Skipped' {
+    $res = New-ScanShare -WhatIf -SkipAccountHardening
+    $step = $res.Steps | Where-Object Step -eq 'Hardening'
+    $step.Status -eq 'Skipped' -and $step.Detail -eq '-SkipAccountHardening'
+}
+
+Test-Case 'Hardening: privileged reused account aborts before the share is created' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Get-LocalAccountRight { @() }
+        function Get-LocalGroupMember {
+            [CmdletBinding()]
+            param([Parameter()][string]$Group)
+            if ($Group -eq 'Administrators') { [pscustomobject]@{ Name = "$env:COMPUTERNAME\scanner" } }
+        }
+        function Get-SmbShare { throw 'share must not be touched while hardening fails' }
+        function Get-NetConnectionProfile { @() }
+
+        New-ScanShare -Path 'C:\Scans' -UserName 'scanner' -SkipFirewall -Confirm:$false
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $hardeningStep = $res.Steps | Where-Object Step -eq 'Hardening'
+    $shareStep = $res.Steps | Where-Object Step -eq 'Share'
+    $res.UncPath -eq $null -and
+    $hardeningStep.Status -eq 'Failed' -and
+    $hardeningStep.Detail -like '*Administrators*' -and
+    $null -eq $shareStep
+}
+
+Test-Case 'Summary: reports the account hardening intent' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-LocalUser { $null }
+        function Get-LocalAccountRight { @() }
+        function Get-LocalGroupMember { @() }
+        function Test-Path { $false }
+        function Get-SmbShare { $null }
+        function Get-SmbFirewallCandidates { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists' } }
+
+        Get-ScanSharePlan -Path 'C:\Scans' -Account 'PC\scanner' -UserName 'scanner' -ShareName 'Scans' `
+            -HasPassword $false -VerifyAvailable $false
+    }
+    $plan = & $mod.NewBoundScriptBlock($testBlock)
+    $hardening = $plan | Where-Object Step -eq 'Hardening'
+    $hardening.Description -like '*Deny interactive*'
+}
+
+# 12. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1
