@@ -23,12 +23,14 @@ function Get-SmbFirewallCandidates {
 
     $candidateRules = @($dedicated | Where-Object { $null -ne $_ }) + @($groupRules | Where-Object { $null -ne $_ })
     $portFilters = $candidateRules | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-    $smbRuleNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    # Port filters are keyed by InstanceID; correlate on it, not Name, because some
+    # rules expose a GUID InstanceID whose Name is the friendly display name.
+    $smbRuleIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($pf in $portFilters) {
         if ($pf.LocalPort -contains '445') {
-            $null = $smbRuleNames.Add($pf.InstanceID)
+            $null = $smbRuleIds.Add($pf.InstanceID)
         }
     }
 
-    @($candidateRules | Where-Object { $smbRuleNames.Contains($_.Name) })
+    @($candidateRules | Where-Object { $smbRuleIds.Contains($_.InstanceID) })
 }
