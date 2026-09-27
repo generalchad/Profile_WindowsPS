@@ -85,12 +85,18 @@ if ([System.Environment]::GetEnvironmentVariable('EDITOR', 'User') -ne $env:EDIT
 }
 
 # --- Argument Completers ---
-$completionCommands = @{
-    docker = @('run', 'build', 'push', 'pull')
-    npm    = @('install', 'run', 'test')
-}
-Register-ArgumentCompleter -CommandName $completionCommands.Keys -ScriptBlock {
-    param($word, $command)
-    $completionCommands[$command] | Where-Object { $_ -like "$word*" }
+# docker/npm are native executables: without -Native the completer never fires,
+# and native completers receive (word, CommandAst, cursor), not a command name.
+# The table lives inside the scriptblock so it can't be lost with profile scope.
+Register-ArgumentCompleter -Native -CommandName docker, npm -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $subcommands = @{
+        docker = @('run', 'build', 'push', 'pull')
+        npm    = @('install', 'run', 'test')
+    }
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($commandAst.GetCommandName())
+    $subcommands[$name] | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
 }
 # Note: Git completion is better handled by the 'posh-git' module if you install it.
