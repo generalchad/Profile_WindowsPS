@@ -64,9 +64,16 @@ function Sync-Profile {
         Re-runs $PROFILE in the current session and prints the load time, so
         edits can be applied without opening a new shell.
     #>
+    [CmdletBinding()]
+    param()
+
     Write-Debug "Reloading PowerShell profile..."
     $startTime = Get-Date
-    . $PROFILE
+    # A plain `. $PROFILE` here would load into this module's scope, so the
+    # reloaded aliases/functions would never reach the session. Run it in the
+    # caller's session state instead.
+    $reload = [scriptblock]::Create(". '$($PROFILE -replace "'", "''")'")
+    $PSCmdlet.SessionState.InvokeCommand.InvokeScript($PSCmdlet.SessionState, $reload, @()) | Out-Null
     $endTime = Get-Date
     $loadTime = ($endTime - $startTime).TotalMilliseconds
     Write-Host "Profile reloaded in $([math]::Round($loadTime))ms." -ForegroundColor Green
