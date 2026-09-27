@@ -385,7 +385,99 @@ Test-Case 'Share: grants Everyone Full Control on an existing share' {
     $shareStep.Detail -eq 'Full Control granted to Everyone'
 }
 
-# 8. Verification Steps (Listener and Access)
+# 8. Pre-flight Summary
+Test-Case 'Summary: reports create vs reuse intents per step' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-LocalUser { $null }
+        function Test-Path { $false }
+        function Get-SmbShare { $null }
+        function Get-SmbFirewallCandidates { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists' } }
+
+        Get-ScanSharePlan -Path 'C:\Scans' -Account 'PC\scanner' -UserName 'scanner' -ShareName 'Scans' `
+            -HasPassword $true -VerifyAvailable $true
+    }
+    $plan = & $mod.NewBoundScriptBlock($testBlock)
+
+    $account = $plan | Where-Object Step -eq 'Account'
+    $folder = $plan | Where-Object Step -eq 'Folder'
+    $ntfs = $plan | Where-Object Step -eq 'NTFS'
+    $share = $plan | Where-Object Step -eq 'Share'
+    $firewall = $plan | Where-Object Step -eq 'Firewall'
+    $listener = $plan | Where-Object Step -eq 'Listener'
+    $access = $plan | Where-Object Step -eq 'Access'
+
+    $account.Description -like '*Create local user PC\scanner*' -and
+    $folder.Description -like '*Create C:\Scans*' -and
+    $ntfs.Description -like '*Lock down*Modify*' -and
+    $share.Description -like '*Create*Everyone: Full Control*' -and
+    $firewall.Description -like '*No change*' -and
+    $listener.Description -like '*Check SMB listener*' -and
+    $access.Description -like '*Write/delete a test file*'
+}
+
+Test-Case 'Summary: reports no-change when folder and account already exist' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Test-Path { $true }
+        function Get-Acl {
+            [pscustomobject]@{
+                Access = @(
+                    [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'PC\scanner' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify },
+                    [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'NT AUTHORITY\SYSTEM' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl },
+                    [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'BUILTIN\Administrators' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl }
+                )
+            }
+        }
+        function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = 'Everyone'; AccessControlType = 'Allow'; AccessRight = 'Full' } }
+        function Get-SmbFirewallCandidates { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists' } }
+
+        Get-ScanSharePlan -Path 'C:\Scans' -Account 'PC\scanner' -UserName 'scanner' -ShareName 'Scans' `
+            -HasPassword $false -VerifyAvailable $true
+    }
+    $plan = & $mod.NewBoundScriptBlock($testBlock)
+
+    $account = $plan | Where-Object Step -eq 'Account'
+    $folder = $plan | Where-Object Step -eq 'Folder'
+    $ntfs = $plan | Where-Object Step -eq 'NTFS'
+    $share = $plan | Where-Object Step -eq 'Share'
+    $access = $plan | Where-Object Step -eq 'Access'
+
+    $account.Description -like '*No change*' -and
+    $folder.Description -like '*No change*' -and
+    $ntfs.Description -like '*No change*' -and
+    $share.Description -like '*No change*' -and
+    $access.Description -like '*Skipped*no password*'
+}
+
+Test-Case 'Summary: flags share path mismatch and skips firewall' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-LocalUser { $null }
+        function Test-Path { $false }
+        function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'D:\Other' } }
+        function Get-SmbFirewallCandidates { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists' } }
+
+        Get-ScanSharePlan -Path 'C:\Scans' -Account 'PC\scanner' -UserName 'scanner' -ShareName 'Scans' `
+            -SkipFirewall -HasPassword $false -VerifyAvailable $false
+    }
+    $plan = & $mod.NewBoundScriptBlock($testBlock)
+
+    $share = $plan | Where-Object Step -eq 'Share'
+    $firewall = $plan | Where-Object Step -eq 'Firewall'
+    $listener = $plan | Where-Object Step -eq 'Listener'
+
+    $share.Description -like '*FAIL*' -and
+    $firewall.Description -like '*Skipped*' -and
+    $listener.Description -like '*Skipped*Test-FileShare*'
+}
+
+# 9. Verification Steps (Listener and Access)
 Test-Case 'Verification: Listener checks local port and Access reports Skipped without password' {
     $mod = Get-Module New-ScanShare
     $testBlock = {
@@ -489,7 +581,7 @@ Test-Case 'Verification: Access formats error 1219 gracefully' {
     $accessStep.Detail -like '*conflicting network credentials*'
 }
 
-# 9. Summary
+# 10. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1
