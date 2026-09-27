@@ -32,9 +32,23 @@ Personal PowerShell 7 profile. For architecture, load order, the load-time budge
 
 - **`.gitignore` is deny-all/whitelist.** New files are ignored by default — add an explicit `!` entry before committing anything new.
 - **Module autoload.** Export via `FunctionsToExport`/`AliasesToExport` in the `.psd1` instead of eager dot-sourcing (keeps startup fast).
-- **No comments unless asked.** Default to clean code; comment only for non-obvious rationale.
+- **Comment only for non-obvious rationale.** No explanatory or narrative comments.
 
-## 5. Reference contrasts
+## 5. Conventions
+
+- **Target: PowerShell 7 only.** Modern syntax (`??`, `?.`, ternary) is fine.
+- **Errors:** use `$PSCmdlet.ThrowTerminatingError()` with an `ErrorRecord` instead of a raw `throw`. For missing elevation, warn and tell the user how to relaunch rather than throwing.
+- **Commits:** conventional commits scoped to the module, e.g. `feat(Test-UdpPort): …`, `fix(Optimize-PSX): …`. One logical change per commit.
+- **Caches:** `omp.cache.ps1`, `zoxide.cache.ps1`, and `pwsh-env.cache.ps1` live in `$env:TEMP`. Delete them to force a rebuild after changing the theme, the tools, or `$env:PATH`.
+
+## 6. Verification
+
+- **Parse:** `$t = $e = $null; [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$t, [ref]$e); $e`
+- **Load:** `Import-Module .\Modules\<Name>\<Name>.psd1 -Force`
+- **Startup cost** (after touching the loader or `Config/`): `Measure-ProfileLoad`, or `$env:PROFILE_TRACE=1; pwsh -NoLogo -Command exit` and read `$env:TEMP\pwsh-profile-trace.log`.
+- **Restart-PrintStack:** `pwsh -NoProfile -File .\Modules\Restart-PrintStack\Tests\Plan.Probe.ps1` (read-only).
+
+## 7. Reference contrasts
 
 ### Narration vs. rationale
 
