@@ -29,9 +29,6 @@ function Test-GithubConnection {
         Write-Debug "Test-GithubConnection: Connected to GitHub successfully."
         $Connected = $true
     }
-    catch [System.Net.WebException] {
-        Write-Debug "Test-GithubConnection: Network error: $($_.Exception.Message)"
-    }
     catch {
         Write-Debug "Test-GithubConnection: An unexpected error occurred: $($_.Exception.Message)"
     }
@@ -185,9 +182,6 @@ function New-Hastebin {
         $url = "http://bin.christitus.com/$hasteKey"
         Write-Output $url
     }
-    catch [System.Net.WebException] {
-        Write-Error "New-Hastebin: Unexpected network error: $($_.Exception.Message)" -ErrorAction Continue
-    }
     catch {
         Write-Error "New-Hastebin: An unexpected error occurred: $($_.Exception.Message)" -ErrorAction Continue
     }
@@ -231,7 +225,7 @@ function Get-LatestPowerShellVersion {
         return $LatestVersion
     }
     catch {
-        Write-Debug Get-LatestPowerShellVersion
+        Write-Debug "Get-LatestPowerShellVersion: $($_.Exception.Message)"
         return $null
     }
 }

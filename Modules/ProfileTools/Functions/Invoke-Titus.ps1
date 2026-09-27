@@ -37,8 +37,6 @@ function Invoke-Titus {
     try {
         Invoke-RestMethod $url | Invoke-Expression
         Write-Verbose "Invoke-Titus: Successfully launched Chris Titus Tech Windows Utility."
-    } catch [System.Net.WebException] {
-        Write-Error "Invoke-Titus: Failed due to network error: $_"
     } catch {
         Write-Error "Invoke-Titus: Failed to launch Chris Titus Tech Windows Utility: $_"
     }
