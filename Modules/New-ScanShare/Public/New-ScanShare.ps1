@@ -234,6 +234,9 @@ function New-ScanShare {
                     $Password = & $promptPassword "New password for '$UserName' (blank passwords cannot be used over SMB)"
                     $user | Set-LocalUser -Password $Password -ErrorAction Stop
                     & $addStep 'Account' 'Updated' "$account (password reset)"
+                    # Re-read the account: the reset can alter expiry/enabled state that the
+                    # never-expire and enable checks below depend on.
+                    $user = Get-LocalUser -Name $UserName -ErrorAction Stop
                 }
                 else { & $addStep 'Account' 'WhatIf' "would reset password for $account" }
             }
