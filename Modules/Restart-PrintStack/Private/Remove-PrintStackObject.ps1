@@ -15,7 +15,7 @@ function Clear-PrintQueueJob {
 
     .DESCRIPTION
         A queue with jobs still spooled either refuses to delete or leaves orphaned
-        .SPL/.SHD files behind in the spool folder. Cancelling first avoids both.
+        SPL/SHD spool files behind in the spool folder. Cancelling first avoids both.
 
         A queue with no jobs is the overwhelmingly common case, so it is checked
         before anything is attempted and reported as Skipped rather than Success -
