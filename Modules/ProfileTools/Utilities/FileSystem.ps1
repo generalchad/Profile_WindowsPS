@@ -51,6 +51,9 @@ function New-File {
     <#
     .SYNOPSIS
         Creates an empty file, optionally marking it Hidden and/or System.
+    .DESCRIPTION
+        Unix touch semantics: an existing file keeps its contents and only has
+        its LastWriteTime updated.
     .PARAMETER Path
         File path. Defaults to ".\New file".
     .PARAMETER Hidden
@@ -72,8 +75,18 @@ function New-File {
 
     process {
         try {
-            Write-Debug "New-File: Creating new file at $Path"
-            $NewItem = New-Item -Path $Path -ItemType File -Force
+            if (Test-Path -LiteralPath $Path -PathType Leaf) {
+                $NewItem = Get-Item -LiteralPath $Path -Force
+                if ($PSCmdlet.ShouldProcess($Path, 'Update LastWriteTime')) {
+                    $NewItem.LastWriteTime = Get-Date
+                }
+            }
+            elseif ($PSCmdlet.ShouldProcess($Path, 'Create file')) {
+                $NewItem = New-Item -Path $Path -ItemType File
+            }
+            else {
+                return
+            }
             if ($Hidden) { $NewItem.Attributes += "Hidden" }
             if ($System) { $NewItem.Attributes += "System" }
             Write-Debug "New-File: Created new file at $Path"
