@@ -76,6 +76,15 @@ function New-ScanShare {
         [switch]$SkipFirewall
     )
 
+    # Normalize path to fully qualified form and strip trailing separators (retaining root e.g. C:\)
+    $resolvedPath = [System.IO.Path]::GetFullPath($Path)
+    $root = [System.IO.Path]::GetPathRoot($resolvedPath)
+    if ($resolvedPath -ne $root) {
+        $Path = $resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    } else {
+        $Path = $resolvedPath
+    }
+
     $dryRun = [bool]$WhatIfPreference
 
     if (-not (Test-Elevation) -and -not $dryRun) {
@@ -102,7 +111,13 @@ function New-ScanShare {
     try {
         if (-not $user) {
             if ($PSCmdlet.ShouldProcess($account, 'Create local user')) {
-                if (-not $Password) { $Password = Read-Host "Password for new local user '$UserName'" -AsSecureString }
+                # Windows LSA blocks network/SMB logins for accounts with empty passwords by default (LimitBlankPasswordUse).
+                while ($null -eq $Password -or $Password.Length -eq 0) {
+                    $Password = Read-Host "Password for new local user '$UserName' (blank passwords cannot be used over SMB)" -AsSecureString
+                    if ($null -eq $Password -or $Password.Length -eq 0) {
+                        Write-Warning "Password cannot be blank. Windows security policy blocks network authentications for accounts with empty passwords."
+                    }
+                }
                 $user = New-LocalUser -Name $UserName -Password $Password -PasswordNeverExpires `
                     -UserMayNotChangePassword -AccountNeverExpires `
                     -Description 'MFP scan-to-folder account (New-ScanShare)' -ErrorAction Stop
@@ -112,7 +127,12 @@ function New-ScanShare {
         }
         else {
             if ($ResetPassword) {
-                if (-not $Password) { $Password = Read-Host "New password for '$UserName'" -AsSecureString }
+                while ($null -eq $Password -or $Password.Length -eq 0) {
+                    $Password = Read-Host "New password for '$UserName' (blank passwords cannot be used over SMB)" -AsSecureString
+                    if ($null -eq $Password -or $Password.Length -eq 0) {
+                        Write-Warning "Password cannot be blank. Windows security policy blocks network authentications for accounts with empty passwords."
+                    }
+                }
                 if ($PSCmdlet.ShouldProcess($account, 'Reset password')) {
                     $user | Set-LocalUser -Password $Password -ErrorAction Stop
                     & $addStep 'Account' 'Updated' "$account (password reset)"
@@ -175,7 +195,11 @@ function New-ScanShare {
             }
             else { & $addStep 'NTFS' 'WhatIf' "would grant Modify to $account" }
         }
-        else { & $addStep 'NTFS' 'WhatIf' "would grant Modify to $account" }
+        else {
+            $status = if ($dryRun) { 'WhatIf' } else { 'Skipped' }
+            $detail = if ($dryRun) { "would grant Modify to $account" } else { "folder '$Path' missing" }
+            & $addStep 'NTFS' $status $detail
+        }
     }
     catch {
         & $addStep 'NTFS' 'Failed' $_.Exception.Message
@@ -185,7 +209,7 @@ function New-ScanShare {
     try {
         $share = Get-SmbShare -Name $ShareName -ErrorAction SilentlyContinue
         if ($share) {
-            if ($share.Path -ne $Path) {
+            if ($share.Path.TrimEnd('\') -ne $Path.TrimEnd('\')) {
                 # Never repoint an existing share: something else may depend on it.
                 & $addStep 'Share' 'Failed' "'$ShareName' already exists for '$($share.Path)'. Use -ShareName to pick another name."
             }
@@ -222,14 +246,31 @@ function New-ScanShare {
             # Matched by group resource id and port rather than display name, which is
             # localized. Public-profile rules are deliberately left alone: enabling
             # SMB on untrusted networks is not needed for a copier on the LAN.
-            $rules = @(Get-NetFirewallRule -Direction Inbound -Group '@FirewallAPI.dll,-28502' -ErrorAction Stop |
+            $rules = @(Get-NetFirewallRule -Direction Inbound -Group '@FirewallAPI.dll,-28502' -ErrorAction SilentlyContinue |
                     Where-Object {
                         $_.Profile -ne 'Public' -and
                         ($_ | Get-NetFirewallPortFilter).LocalPort -contains '445'
                     })
+
+            # Secondary fallback by DisplayGroup / Name if localized group ID missed
+            if ($rules.Count -eq 0) {
+                $rules = @(Get-NetFirewallRule -Direction Inbound -ErrorAction SilentlyContinue |
+                        Where-Object {
+                            ($_.DisplayGroup -like '*File and Printer Sharing*' -or $_.Name -like '*FPS-SMB-In*') -and
+                            $_.Profile -ne 'Public' -and
+                            ($_ | Get-NetFirewallPortFilter).LocalPort -contains '445'
+                        })
+            }
+
             $disabled = @($rules | Where-Object Enabled -eq 'False')
             if ($rules.Count -eq 0) {
-                & $addStep 'Firewall' 'Failed' 'No built-in SMB-In rule found; open TCP 445 manually.'
+                if ($PSCmdlet.ShouldProcess('Inbound TCP 445', 'Create dedicated SMB scan firewall rule')) {
+                    $null = New-NetFirewallRule -Name 'ScanShare-SMB-In' -DisplayName 'ScanShare SMB Inbound (TCP 445)' `
+                        -Direction Inbound -Protocol TCP -LocalPort 445 -Profile Domain, Private -Action Allow -ErrorAction Stop
+                    & $addStep 'Firewall' 'Created' 'created dedicated SMB-In rule (TCP 445)'
+                } else {
+                    & $addStep 'Firewall' 'WhatIf' 'would create dedicated SMB-In rule (TCP 445)'
+                }
             }
             elseif ($disabled.Count -eq 0) {
                 & $addStep 'Firewall' 'Exists' 'SMB-In (TCP 445) enabled'
@@ -245,6 +286,18 @@ function New-ScanShare {
         }
     }
 
+    # Warn if active network connection is on Public profile (firewall will drop incoming scans)
+    $activeProfiles = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object IPv4Connectivity -ne 'NoTraffic')
+    $publicProfiles = @($activeProfiles | Where-Object NetworkCategory -eq 'Public')
+    if ($publicProfiles.Count -gt 0) {
+        $pubNames = ($publicProfiles | ForEach-Object { "'$($_.Name)'" }) -join ', '
+        Write-Warning "Active network profile ($pubNames) is set to 'Public'. Windows Firewall blocks incoming SMB scans on Public networks."
+        Write-Host "  To allow copier scans, change to Private in PowerShell (Admin):" -ForegroundColor Yellow
+        foreach ($p in $publicProfiles) {
+            Write-Host "    Set-NetConnectionProfile -Name '$($p.Name)' -NetworkCategory Private" -ForegroundColor Yellow
+        }
+    }
+
     # ---- 6. Verify ----------------------------------------------------------
     $verification = $null
     if (-not $dryRun -and (Get-Command Test-FileShare -ErrorAction SilentlyContinue)) {
@@ -256,9 +309,24 @@ function New-ScanShare {
     $failed = @($steps | Where-Object Status -eq 'Failed').Count
     Write-Host ''
     if (-not $dryRun -and $failed -eq 0) {
-        $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        # Select active physical LAN IP over default gateway, avoiding virtual WSL/Hyper-V/VMware adapters
+        $primaryConfig = Get-NetIPConfiguration -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPv4DefaultGateway } | Select-Object -First 1
+        $ip = $primaryConfig?.IPv4Address?.IPAddress
+        if (-not $ip) {
+            $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.PrefixOrigin -ne 'WellKnown' -and
+                    $_.IPAddress -notlike '169.254.*' -and
+                    $_.InterfaceAlias -notmatch '(?i)vEthernet|WSL|VMnet|Docker|Tailscale|Loopback'
+                } | Select-Object -First 1)?.IPAddress
+        }
+        if (-not $ip) {
+            $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                 Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notlike '169.254.*' } |
-                Select-Object -First 1).IPAddress
+                Select-Object -First 1)?.IPAddress
+        }
+
         Write-Host 'Enter on the copier:' -ForegroundColor Cyan
         Write-Host "  Host / server : $env:COMPUTERNAME$(if ($ip) { "  (or $ip)" })"
         Write-Host "  Share / path  : $ShareName"
