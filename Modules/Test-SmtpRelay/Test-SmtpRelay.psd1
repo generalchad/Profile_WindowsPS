@@ -21,13 +21,13 @@ ModuleVersion = '0.0.2'
 GUID = 'cf4961a4-974a-4dd5-8ebd-90aaab9ac27b'
 
 # Author of this module
-Author = 'GenChadT'
+Author = 'Timothy W. Brown'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'Timothy W. Brown'
 
 # Copyright statement for this module
-Copyright = '(c) GenChadT. All rights reserved.'
+Copyright = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Tests SMTP connectivity, banner retrieval, and alias resolution for common mail relays.'

@@ -2,9 +2,9 @@
     RootModule           = 'Invoke-Elevation.psm1'
     ModuleVersion        = '1.0.0'
     GUID                 = '3f2a9c1e-7d54-4a2b-9e0f-6c8b1d4a7e21'
-    Author               = 'GenChadt'
-    CompanyName          = 'Unknown'
-    Copyright            = '(c) GenChadT. All rights reserved.'
+    Author               = 'Timothy W. Brown'
+    CompanyName          = 'Timothy W. Brown'
+    Copyright            = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
     Description          = 'Relaunches the current Windows Terminal session as Administrator, reusing the same profile and working directory, or runs a script block elevated. Falls back to an elevated PowerShell host outside Windows Terminal.'
 

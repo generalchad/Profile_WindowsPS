@@ -21,13 +21,13 @@ ModuleVersion = '0.2.0'
 GUID = 'a048737e-3012-4c04-8bb3-4d9acf8d926a'
 
 # Author of this module
-Author = 'GenChadT'
+Author = 'Timothy W. Brown'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'Timothy W. Brown'
 
 # Copyright statement for this module
-Copyright = '(c) GenChadT. All rights reserved.'
+Copyright = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Media renaming module for Plex and Jellyfin standards. Renames videos, subtitle sidecars and folders, detects subtitle language, and optionally removes scene junk files.'

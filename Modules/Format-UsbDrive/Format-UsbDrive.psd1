@@ -2,9 +2,9 @@
     RootModule           = 'Format-UsbDrive.psm1'
     ModuleVersion        = '1.1.0'
     GUID                 = 'cb63a23c-b797-4050-b6b9-c5dac8f4d8a3'
-    Author               = 'GenChadT'
-    CompanyName          = 'Unknown'
-    Copyright            = '(c) GenChadT. All rights reserved.'
+    Author               = 'Timothy W. Brown'
+    CompanyName          = 'Timothy W. Brown'
+    Copyright            = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
     Description          = 'Formats removable USB drives (under 70GB) to FAT32, exFAT or NTFS with safety guards against touching non-USB or oversized disks, plus Xerox, Kyocera and generic MFD firmware-upgrade profiles.'
 
