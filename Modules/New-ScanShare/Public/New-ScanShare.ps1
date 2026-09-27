@@ -244,9 +244,6 @@ function New-ScanShare {
     }
     else {
         try {
-            # Matched by group resource id and port rather than display name, which is
-            # localized. Public-profile rules are deliberately left alone: enabling
-            # SMB on untrusted networks is not needed for a copier on the LAN.
             $dedicated = Get-NetFirewallRule -Name 'ScanShare-SMB-In' -ErrorAction SilentlyContinue
             $groupRules = Get-NetFirewallRule -Direction Inbound -Group '@FirewallAPI.dll,-28502' -ErrorAction SilentlyContinue
             if (-not $groupRules) {
@@ -262,30 +259,72 @@ function New-ScanShare {
                 }
             }
 
-            $rules = @($candidateRules | Where-Object {
-                $smbRuleNames.Contains($_.Name) -and
-                $_.Profile -notmatch 'Public|Any'
-            })
+            $smbCandidateRules = @($candidateRules | Where-Object { $smbRuleNames.Contains($_.Name) })
+            $plan = Get-SmbFirewallPlan -Rules $smbCandidateRules
 
-            $disabled = @($rules | Where-Object Enabled -eq 'False')
-            if ($rules.Count -eq 0) {
-                if ($PSCmdlet.ShouldProcess('Inbound TCP 445', 'Create dedicated SMB scan firewall rule')) {
-                    $null = New-NetFirewallRule -Name 'ScanShare-SMB-In' -DisplayName 'ScanShare SMB Inbound (TCP 445)' `
-                        -Direction Inbound -Protocol TCP -LocalPort 445 -Profile Domain, Private -Action Allow `
-                        -RemoteAddress LocalSubnet -ErrorAction Stop
-                    & $addStep 'Firewall' 'Created' 'created dedicated SMB-In rule (TCP 445)'
-                } else {
-                    & $addStep 'Firewall' 'WhatIf' 'would create dedicated SMB-In rule (TCP 445)'
-                }
-            }
-            elseif ($disabled.Count -eq 0) {
+            if ($plan.Status -eq 'Exists') {
                 & $addStep 'Firewall' 'Exists' 'SMB-In (TCP 445) enabled'
             }
-            elseif ($PSCmdlet.ShouldProcess('File and Printer Sharing (SMB-In)', 'Enable firewall rule')) {
-                $disabled | Enable-NetFirewallRule -ErrorAction Stop
-                & $addStep 'Firewall' 'Updated' "enabled $($disabled.Count) SMB-In rule(s)"
+            else {
+                $didWork = $false
+                $actions = [System.Collections.Generic.List[string]]::new()
+                $whatIfs = [System.Collections.Generic.List[string]]::new()
+
+                if ($plan.RulesToEnable.Count -gt 0) {
+                    $targetDesc = 'File and Printer Sharing (SMB-In)'
+                    if ($PSCmdlet.ShouldProcess($targetDesc, 'Enable firewall rule')) {
+                        $plan.RulesToEnable | Enable-NetFirewallRule -ErrorAction Stop
+                        $actions.Add("enabled $($plan.RulesToEnable.Count) SMB-In rule(s)")
+                        $didWork = $true
+                    }
+                    else {
+                        $whatIfs.Add("would enable $($plan.RulesToEnable.Count) SMB-In rule(s)")
+                    }
+                }
+
+                if ($plan.DedicatedAction -eq 'Create') {
+                    $profDesc = $plan.DedicatedProfiles -join ', '
+                    if ($PSCmdlet.ShouldProcess("Inbound TCP 445 ($profDesc)", 'Create dedicated SMB scan firewall rule')) {
+                        $null = New-NetFirewallRule -Name 'ScanShare-SMB-In' -DisplayName 'ScanShare SMB Inbound (TCP 445)' `
+                            -Direction Inbound -Protocol TCP -LocalPort 445 -Profile $plan.DedicatedProfiles -Action Allow `
+                            -RemoteAddress LocalSubnet -ErrorAction Stop
+                        $actions.Add('created dedicated SMB-In rule (TCP 445)')
+                        $didWork = $true
+                    }
+                    else {
+                        $whatIfs.Add('would create dedicated SMB-In rule (TCP 445)')
+                    }
+                }
+                elseif ($plan.DedicatedAction -eq 'Update') {
+                    $profDesc = $plan.DedicatedProfiles -join ', '
+                    if ($PSCmdlet.ShouldProcess("ScanShare-SMB-In ($profDesc)", 'Update dedicated firewall rule profiles')) {
+                        Set-NetFirewallRule -Name 'ScanShare-SMB-In' -Profile $plan.DedicatedProfiles -Enabled True -ErrorAction Stop
+                        $actions.Add('updated dedicated SMB-In rule profiles')
+                        $didWork = $true
+                    }
+                    else {
+                        $whatIfs.Add("would update dedicated SMB-In rule profiles to $profDesc")
+                    }
+                }
+                elseif ($plan.DedicatedAction -eq 'Enable') {
+                    if ($PSCmdlet.ShouldProcess('ScanShare-SMB-In', 'Enable dedicated firewall rule')) {
+                        Enable-NetFirewallRule -Name 'ScanShare-SMB-In' -ErrorAction Stop
+                        $actions.Add('enabled dedicated SMB-In rule')
+                        $didWork = $true
+                    }
+                    else {
+                        $whatIfs.Add('would enable dedicated SMB-In rule')
+                    }
+                }
+
+                if ($dryRun) {
+                    & $addStep 'Firewall' 'WhatIf' ($whatIfs -join '; ')
+                }
+                elseif ($didWork) {
+                    $status = if ($plan.DedicatedAction -eq 'Create') { 'Created' } else { 'Updated' }
+                    & $addStep 'Firewall' $status ($actions -join '; ')
+                }
             }
-            else { & $addStep 'Firewall' 'WhatIf' "would enable $($disabled.Count) SMB-In rule(s)" }
         }
         catch {
             & $addStep 'Firewall' 'Failed' $_.Exception.Message

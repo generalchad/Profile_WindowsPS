@@ -179,7 +179,73 @@ Test-Case 'Get-PrimaryIPv4Address returns null when no matching IPv4 address exi
     $null -eq $ip
 }
 
-# 6. Summary
+# 6. Firewall Heuristics and Planning
+Test-Case 'Firewall plan: Stock Win11 enables Domain and creates dedicated Private rule' {
+    $mod = Get-Module New-ScanShare
+    $rules = @(
+        [pscustomobject]@{ Name = 'FPS-SMB-In-TCP'; Profile = 'Private, Public'; Enabled = 'False'; Action = 'Allow'; LocalPort = '445' },
+        [pscustomobject]@{ Name = 'FPS-SMB-In-TCP-NoScope'; Profile = 'Domain'; Enabled = 'False'; Action = 'Allow'; LocalPort = '445' }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($r) Get-SmbFirewallPlan -Rules $r }) $rules
+
+    $plan.RulesToEnable.Count -eq 1 -and
+    $plan.RulesToEnable[0].Name -eq 'FPS-SMB-In-TCP-NoScope' -and
+    $plan.DedicatedAction -eq 'Create' -and
+    @($plan.DedicatedProfiles) -contains 'Private' -and
+    @($plan.DedicatedProfiles) -notcontains 'Public'
+}
+
+Test-Case 'Firewall plan: Exists when Domain and Private rules are already active' {
+    $mod = Get-Module New-ScanShare
+    $rules = @(
+        [pscustomobject]@{ Name = 'FPS-SMB-In-TCP-NoScope'; Profile = 'Domain'; Enabled = 'True'; Action = 'Allow'; LocalPort = '445' },
+        [pscustomobject]@{ Name = 'ScanShare-SMB-In'; Profile = 'Private'; Enabled = 'True'; Action = 'Allow'; LocalPort = '445' }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($r) Get-SmbFirewallPlan -Rules $r }) $rules
+
+    $plan.Status -eq 'Exists' -and
+    $plan.RulesToEnable.Count -eq 0 -and
+    $plan.DedicatedAction -eq 'None'
+}
+
+Test-Case 'Firewall plan: Any profile active rule covers Domain and Private' {
+    $mod = Get-Module New-ScanShare
+    $rules = @(
+        [pscustomobject]@{ Name = 'Custom-SMB-Any'; Profile = 'Any'; Enabled = 'True'; Action = 'Allow'; LocalPort = '445' }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($r) Get-SmbFirewallPlan -Rules $r }) $rules
+
+    $plan.Status -eq 'Exists' -and
+    $plan.RulesToEnable.Count -eq 0 -and
+    $plan.DedicatedAction -eq 'None'
+}
+
+Test-Case 'Firewall plan: Ignores Block rules and Public-only rules' {
+    $mod = Get-Module New-ScanShare
+    $rules = @(
+        [pscustomobject]@{ Name = 'Block-SMB'; Profile = 'Domain, Private'; Enabled = 'True'; Action = 'Block'; LocalPort = '445' },
+        [pscustomobject]@{ Name = 'FPS-SMB-In-TCP'; Profile = 'Public'; Enabled = 'True'; Action = 'Allow'; LocalPort = '445' }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($r) Get-SmbFirewallPlan -Rules $r }) $rules
+
+    $plan.DedicatedAction -eq 'Create' -and
+    @($plan.DedicatedProfiles) -contains 'Domain' -and
+    @($plan.DedicatedProfiles) -contains 'Private'
+}
+
+Test-Case 'Firewall plan: Updates existing dedicated rule when profile is missing' {
+    $mod = Get-Module New-ScanShare
+    $rules = @(
+        [pscustomobject]@{ Name = 'ScanShare-SMB-In'; Profile = 'Domain'; Enabled = 'True'; Action = 'Allow'; LocalPort = '445' }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($r) Get-SmbFirewallPlan -Rules $r }) $rules
+
+    $plan.DedicatedAction -eq 'Update' -and
+    @($plan.DedicatedProfiles) -contains 'Domain' -and
+    @($plan.DedicatedProfiles) -contains 'Private'
+}
+
+# 7. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1
