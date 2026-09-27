@@ -13,7 +13,7 @@ function Get-SubtitleFile {
         Subtitles that cannot be matched are returned with a $null Video so the
         caller can report them as orphans rather than guessing.
 
-        .idx and .sub form an inseparable VobSub pair. They are grouped so both
+        VobSub .idx and .sub files form an inseparable pair. They are grouped so both
         halves always receive the same base name; renaming only one breaks the
         subtitle entirely.
     .PARAMETER Directory
