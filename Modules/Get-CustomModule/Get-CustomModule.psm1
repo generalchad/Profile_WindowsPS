@@ -41,13 +41,15 @@ function Get-CustomModule {
     # Not profile code; shipped for external tools. Kept in Modules/ so autoload finds them.
     $ignored = @('7Zip4Powershell', 'Microsoft.PowerToys.Configure')
 
-    $matches = [System.Management.Automation.WildcardPattern[]]@($Name)
+    $wildcardPatterns = [System.Management.Automation.WildcardPattern[]]@($Name)
+    if ($wildcardPatterns.Count -eq 0) { return }
+
     $results = [System.Collections.Generic.List[object]]::new()
 
     foreach ($dir in [System.IO.Directory]::GetDirectories($moduleRoot)) {
         $moduleName = [System.IO.Path]::GetFileName($dir)
         if ($moduleName -in $ignored) { continue }
-        if ($matches.Count -gt 0 -and -not ($matches | Where-Object { $_.IsMatch($moduleName) })) { continue }
+        if (-not ($wildcardPatterns | Where-Object { $_.IsMatch($moduleName) })) { continue }
 
         $manifest = Get-ChildItem -LiteralPath $dir -Filter '*.psd1' -File -ErrorAction SilentlyContinue |
             Select-Object -First 1
