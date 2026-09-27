@@ -1,4 +1,4 @@
-# PowerShell Profile — Context & Optimization Notes
+# PowerShell Profile — Context
 
 ## Purpose
 
@@ -10,6 +10,8 @@ unless it must.
 - Entry point: `Microsoft.PowerShell_profile.ps1` ("the loader")
 - OS: Windows 11
 
+Agent rules and conventions live in `AGENTS.md`.
+
 ## Layout
 
 ```
@@ -18,10 +20,7 @@ Config/
   CommandCache.ps1                 PATH-keyed command-resolution cache
   Settings.ps1                     PSReadLine, editor detection, completers
   Aliases.ps1                      Dynamic / built-in-conflicting aliases ONLY
-Modules/
-  ProfileTools/                    Personal toolbox (functions + static aliases),
-                                   autoloaded on first use via the manifest
-  <other self-contained modules>   Compress-Video, Optimize-PSX, Restart-*, etc.
+Modules/                           Self-contained modules (see below)
 Themes/                            oh-my-posh theme JSON
 ```
 
@@ -29,28 +28,38 @@ Themes/                            oh-my-posh theme JSON
 
 1. `Config/CommandCache.ps1` — defines `Resolve-CachedCommand`.
 2. `Config/Settings.ps1` — PSReadLine options, editor detection, argument completers.
-3. `Config/Aliases.ps1` — the small set of aliases that must be eager.
-4. `$env:PSModulePath` — prepends `Modules/` so custom modules autoload.
+3. `$env:PSModulePath` — prepends `Modules/` so custom modules autoload.
+4. `Config/Aliases.ps1` — the small set of aliases that must be eager.
 5. oh-my-posh prompt init (cached).
 6. zoxide init (cached).
 
-`Modules/ProfileTools` is **not** imported at startup — its functions and static
-aliases are listed in `ProfileTools.psd1` (`FunctionsToExport` / `AliasesToExport`),
-so PowerShell loads the module the first time any of them is used.
+No module is imported at startup. Each manifest lists its commands in
+`FunctionsToExport` / `AliasesToExport`, so PowerShell loads the module the first
+time one of them is used.
+
+## Modules
+
+| Module | Purpose |
+|--------|---------|
+| `Compress-Video` | Batch FFmpeg compression with GPU acceleration, resume/skip detection, and throttled parallelism. |
+| `Format-UsbDrive` | Formats removable USB drives (<70 GB) to FAT32/exFAT/NTFS, with MFD firmware-upgrade profiles. |
+| `Optimize-PSX` | Extracts disc-image archives and compresses PS1/PS2, Saturn, and Dreamcast images to CHD. |
+| `Optimize-VMX` | Tunes VMware `.vmx` files for network stability and legacy-OS compatibility. |
+| `ProfileTools` | Personal toolbox: functions, utilities, and static aliases, including `Measure-ProfileLoad`. |
+| `Rename-MediaFile` | Renames media, subtitles, and folders to Plex/Jellyfin standards. |
+| `Restart-NetworkStack` | Resets the Windows network stack (DNS, DHCP, Winsock, TCP/IP, firewall, proxy, and more). |
+| `Restart-PrintStack` | Removes accumulated print queues, orphaned ports, and stale scanners. See its `README.md`. |
+| `Test-FileShare` | SMB and FTP/SFTP/FTPS connectivity checks for MFP scan-to-folder troubleshooting. |
+| `Test-SmtpRelay` | SMTP connectivity, banner, and alias checks for common mail relays. |
+| `Test-UdpPort` | UDP connectivity probes with built-in game-server query packets. |
+
+`Modules/` also contains third-party modules that are **not** tracked and must not
+be edited as repo code: `7Zip4Powershell` and `Microsoft.PowerToys.Configure`.
 
 ## Load-time budget
 
-Measured with `Measure-ProfileLoad` (10 cold starts, real console). Engine
-baseline (`-NoProfile`) is ~280 ms on this machine.
-
-| Milestone                     | Total | Profile overhead |
-|-------------------------------|-------|------------------|
-| Original (before any changes) | ~8.5s | ~8.2s |
-| After HKCU write fix          | ~1.64s | ~1.36s |
-| After command cache           | ~0.93s | ~0.65s |
-| After ProfileTools module     | ~0.85s | ~0.56s |
-
-Per-stage breakdown (after all current fixes):
+Measured with `Measure-ProfileLoad` (10 cold starts, real console) in August 2026.
+Engine baseline (`-NoProfile`) is ~280 ms on this machine.
 
 | Stage          | ~ms | Notes |
 |----------------|-----|-------|
@@ -61,36 +70,26 @@ Per-stage breakdown (after all current fixes):
 | PSModulePath   | 14  | |
 | **TOTAL**      | ~500 | in-profile; +~280 engine = ~780 total |
 
-## Root causes found & fixed
+## Design notes
 
-1. **Per-shell registry write (~7.1s).** `Config/Settings.ps1` called
-   `[Environment]::SetEnvironmentVariable('EDITOR', …, 'User')` unconditionally.
-   A User/Machine-scope write broadcasts `WM_SETTINGCHANGE` to every top-level
-   window and blocks on each. Now guarded: it only writes when the stored value
-   actually differs (a ~25 ms read replaces a ~7 s write). This was the dominant
-   cost and the reason startup felt "~3s" (variable, depending on open windows).
-
-2. **`Get-Command` misses (~105 ms each, ~8 of them).** A single `Get-Command`
-   miss scans every `$env:PATH` entry. The profile probed ~8 commands (most of
-   which miss on this machine) on every launch — ~800 ms total. Replaced with
-   `Resolve-CachedCommand` (see below).
-
-3. **Eager dot-sourcing of Functions/Utilities (~85 ms + static aliases).**
-   All loose scripts were dot-sourced at startup. Moved into the autoloading
-   `ProfileTools` module, so they cost ~0 until first use.
-
-4. **oh-my-posh init (~188 ms, remaining).** The prompt init is already cached,
-   but running the init script still costs ~188 ms. See "Remaining work".
-
-## Command-resolution cache
-
-`Config/CommandCache.ps1` persists resolved command paths (hits **and** misses)
-to `$env:TEMP\pwsh-env.cache.ps1`, keyed on a SHA-256 of `$env:PATH`. It
-regenerates only when `$env:PATH` changes (e.g. after installing a tool), so a
-miss costs ~0 on subsequent launches instead of ~105 ms.
-
-- `Resolve-CachedCommand <name>` returns the absolute path, or `$null` on miss.
-- To force a rebuild: `Remove-Item $env:TEMP\pwsh-env.cache.ps1`.
+- **The `EDITOR` write is guarded.** A User/Machine-scope
+  `[Environment]::SetEnvironmentVariable` broadcasts `WM_SETTINGCHANGE` to every
+  top-level window and blocks on each — it once cost ~7 s per launch.
+  `Config/Settings.ps1` only writes when the stored value actually differs. Do not
+  make that write unconditional.
+- **Command lookups go through `Resolve-CachedCommand`.** A `Get-Command` miss
+  scans every `$env:PATH` entry (~105 ms each). `Config/CommandCache.ps1` persists
+  hits **and** misses to `$env:TEMP\pwsh-env.cache.ps1`, keyed on a SHA-256 of
+  `$env:PATH`, and regenerates only when `$env:PATH` changes. Returns the absolute
+  path, or `$null` on miss. Use it instead of `Get-Command` anywhere in the startup
+  path.
+- **PSReadLine prediction needs a real VT console.** `Set-PSReadLineOption` drops
+  the prediction keys when output is redirected and is isolated in its own
+  `try/catch`, so a redirected host cannot abort `Settings.ps1`.
+- **History secret filter.** `AddToHistoryHandler` returns `$false` for commands
+  matching `password|secret|key|apikey|token|connectionstring`.
+- **Terminal-Icons is not imported** — measurable startup cost for non-essential
+  icons. Opt in with `Import-Module Terminal-Icons`.
 
 ## Tooling
 
@@ -98,37 +97,6 @@ miss costs ~0 on subsequent launches instead of ~105 ms.
   profile) with optional per-stage breakdown.
 - `$env:PROFILE_TRACE=1` before launching `pwsh` writes a per-stage breakdown to
   `$env:TEMP\pwsh-profile-trace.log`.
-
-## Correctness bugs fixed along the way
-
-- **PSReadLine aborted Settings.ps1** in redirected hosts (prediction requires a
-  real VT console). `Set-PSReadLineOption` now drops prediction keys when output
-  is redirected and is isolated in its own `try/catch`.
-- **History secret filter never worked** — the `AddToHistoryHandler` returned
-  `$null` in both branches (defaulting to "keep"). Now returns `$true`/`$false`
-  against a regex (`password|secret|key|apikey|token|connectionstring`).
-- **Duplicate `Invoke-Explorer`** — was defined in both `Core.ps1` and
-  `FileSystem.ps1`. The `Core.ps1` copy was removed.
-- **Dangling aliases** — `resetip`/`renewip`/`updateip` pointed to
-  `Update-IPConfig`, which no longer exists. Removed.
-
-## `code <target>` opens extra windows
-
-Not a profile bug. `code` resolves to a single `code-insiders.cmd` (one process).
-The extra windows come from two VS Code defaults:
-
-- `window.restoreWindows` (default `all`) — a cold `code <target>` also restores
-  the previous session.
-- `window.openFoldersInNewWindow` (default `default`) — `code <folder>` opens a
-  second window when one is already open.
-
-Fixed by setting, in `Code - Insiders\User\settings.json` (outside this repo):
-
-```json
-"window.restoreWindows": "none",
-"window.openFoldersInNewWindow": "off",
-"window.openFilesInNewWindow": "off"
-```
 
 ## Remaining work
 
@@ -142,8 +110,13 @@ Fixed by setting, in `Code - Insiders\User\settings.json` (outside this repo):
 - **History-filter regex** is substring-based; it can drop innocent commands like
   `winget search token`. Consider tightening if that becomes annoying.
 
+## Environment notes
+
+- **`code <target>` opening extra windows** is VS Code behavior, not the profile:
+  set `window.restoreWindows: "none"`, `window.openFoldersInNewWindow: "off"`, and
+  `window.openFilesInNewWindow: "off"` in `Code - Insiders\User\settings.json`.
+
 ## Housekeeping
 
-- `Modules/7Zip4Powershell` had 4 versions installed (~28 MB); pruned to `2.12.0`.
-- This `CONTEXT.md` is tracked via an explicit `!CONTEXT.md` entry in `.gitignore`
-  (the repo uses a deny-all/whitelist ignore policy).
+- `.gitignore` is deny-all/whitelist: `AGENTS.md`, `CONTEXT.md`, and each tracked
+  module need an explicit `!` entry.
