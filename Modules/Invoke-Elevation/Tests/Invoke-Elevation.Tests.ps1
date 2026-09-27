@@ -78,6 +78,28 @@ Test-Case 'Defines a positional Close parameter that accepts x' {
     $validateSet.ValidValues -contains 'x'
 }
 
+Test-Case 'Exports el, isudo and elevate aliases for Invoke-Elevation' {
+    Import-Module $manifestPath -Force
+    $names = Get-Alias | Where-Object Definition -eq 'Invoke-Elevation' | Select-Object -ExpandProperty Name
+    $names -contains 'el' -and $names -contains 'isudo' -and $names -contains 'elevate'
+}
+
+Test-Case 'ScriptBlock is positional 0, mandatory, in the Run parameter set' {
+    $cmd = Get-Command Invoke-Elevation
+    $param = $cmd.Parameters['ScriptBlock']
+    $attr = $param.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
+    $param.ParameterType -eq [scriptblock] -and
+    $attr.Position -eq 0 -and
+    $attr.Mandatory -and
+    $attr.ParameterSetName -eq 'Run'
+}
+
+Test-Case 'Close belongs to the Elevate parameter set' {
+    $cmd = Get-Command Invoke-Elevation
+    $attr = $cmd.Parameters['Close'].Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
+    $attr.ParameterSetName -eq 'Elevate'
+}
+
 Test-Case 'Binds the bare x positional value' {
     $mod = Get-Module Invoke-Elevation
     $testBlock = {
@@ -234,7 +256,84 @@ Test-Case 'Non-cancellation launch failure surfaces as a terminating error' {
     }
 }
 
-# 3. Summary
+# 3. Script block execution (Start-Process mocked, -EncodedCommand decoded)
+Test-Case 'Inside Windows Terminal runs a script block elevated via -EncodedCommand' {
+    $oldSession = $env:WT_SESSION
+    $oldProfile = $env:WT_PROFILE_ID
+    try {
+        $env:WT_SESSION = 'test-session'
+        $env:WT_PROFILE_ID = '{00000000-0000-0000-0000-000000000001}'
+
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $false }
+            function Get-Command { [pscustomobject]@{ Source = 'C:\WindowsApps\wt.exe' } }
+            function Start-Process {
+                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction)
+                $script:capture = [pscustomobject]@{
+                    FilePath = $FilePath
+                    Verb     = $Verb
+                    Args     = $ArgumentList
+                }
+                [pscustomobject]@{ Id = 42 }
+            }
+            Invoke-Elevation { New-ScanShare -Path 'D:\Scans' -ShareName 'Scans' }
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+
+        $m = [regex]::Match($res.Args, '-EncodedCommand\s+([A-Za-z0-9+/=]+)')
+        $decoded = if ($m.Success) { [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value)) } else { $null }
+
+        $res.FilePath -eq 'C:\WindowsApps\wt.exe' -and
+        $res.Verb -eq 'RunAs' -and
+        $res.Args -like '*-p "*' -and
+        $res.Args -like '*-d "*' -and
+        $res.Args -like '*-- pwsh*' -and
+        $decoded -eq "New-ScanShare -Path 'D:\Scans' -ShareName 'Scans'"
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+        $env:WT_PROFILE_ID = $oldProfile
+    }
+}
+
+Test-Case 'Outside Windows Terminal runs a script block elevated via pwsh -EncodedCommand' {
+    $oldSession = $env:WT_SESSION
+    try {
+        $env:WT_SESSION = $null
+
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $false }
+            function Start-Process {
+                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction)
+                $script:capture = [pscustomobject]@{
+                    FilePath = $FilePath
+                    Verb     = $Verb
+                    Args     = $ArgumentList
+                }
+                [pscustomobject]@{ Id = 43 }
+            }
+            Invoke-Elevation { Write-Output 'hello' }
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+
+        $expectedHost = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+        $m = [regex]::Match($res.Args, '-EncodedCommand\s+([A-Za-z0-9+/=]+)')
+        $decoded = if ($m.Success) { [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value)) } else { $null }
+
+        $res.FilePath -eq $expectedHost -and
+        $res.Verb -eq 'RunAs' -and
+        $decoded -eq "Write-Output 'hello'"
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+    }
+}
+
+# 4. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1
