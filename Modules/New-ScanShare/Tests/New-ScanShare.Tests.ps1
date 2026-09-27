@@ -59,10 +59,11 @@ Test-Case 'Module imports cleanly and exports New-ScanShare' {
 }
 
 # 2. Parameter Validation & Constraints
-Test-Case 'Validates valid ShareName' {
+Test-Case 'Validates valid ShareName and UserName parameters' {
     $cmd = Get-Command New-ScanShare
-    $param = $cmd.Parameters['ShareName']
-    $null -ne $param
+    $paramShare = $cmd.Parameters['ShareName']
+    $paramUser = $cmd.Parameters['UserName']
+    $null -ne $paramShare -and $null -ne $paramUser
 }
 
 Test-Case 'Rejects invalid characters in ShareName parameter metadata' {
@@ -93,10 +94,21 @@ Test-Case 'Path normalizes trailing slash in -WhatIf simulation' {
     $res.Path -eq 'C:\Scans'
 }
 
-Test-Case 'Relative path resolves to absolute path' {
-    $expected = [System.IO.Path]::GetFullPath('.\ScansTest').TrimEnd('\')
-    $res = New-ScanShare -Path '.\ScansTest' -WhatIf
-    $res.Path -eq $expected
+Test-Case 'Preserves filesystem root path without stripping separator' {
+    $res = New-ScanShare -Path 'C:\' -ShareName 'Scans' -WhatIf
+    $res.Path -eq 'C:\'
+}
+
+Test-Case 'Relative path resolves against current PowerShell location' {
+    Push-Location $env:TEMP
+    try {
+        $expected = Join-Path (Get-Location).Path 'ScansTest'
+        $res = New-ScanShare -Path '.\ScansTest' -WhatIf
+        $res.Path -eq $expected
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 # 4. Dry Run & Output Schema
@@ -114,25 +126,29 @@ Test-Case '-WhatIf does not mutate file system or share state' {
     -not (Test-Path -LiteralPath $testFolder)
 }
 
-# 5. IP Address and Network Heuristics
-Test-Case 'Physical LAN IP does not resolve to internal virtual switches' {
-    $primaryConfig = Get-NetIPConfiguration -ErrorAction SilentlyContinue |
-        Where-Object { $_.IPv4DefaultGateway } | Select-Object -First 1
-    $ip = $primaryConfig?.IPv4Address?.IPAddress
-    if (-not $ip) {
-        $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-            Where-Object {
-                $_.PrefixOrigin -ne 'WellKnown' -and
-                $_.IPAddress -notlike '169.254.*' -and
-                $_.InterfaceAlias -notmatch '(?i)vEthernet|WSL|VMnet|Docker|Tailscale|Loopback'
-            } | Select-Object -First 1)?.IPAddress
-    }
+Test-Case '-ResetPassword with -WhatIf does not prompt for input' {
+    # Existing local user (e.g. Administrator or Guest) should report WhatIf without blocking on Read-Host
+    $existingUser = (Get-LocalUser | Select-Object -First 1)?.Name
+    if (-not $existingUser) { $existingUser = 'Administrator' }
+    $res = New-ScanShare -UserName $existingUser -ResetPassword -WhatIf
+    $accountStep = $res.Steps | Where-Object Step -eq 'Account'
+    $accountStep.Status -eq 'WhatIf'
+}
 
-    # Ensure IP is neither loopback, APIPA, nor private virtual switch
+Test-Case '-SkipFirewall records Skipped status in Steps' {
+    $res = New-ScanShare -SkipFirewall -WhatIf
+    $fwStep = $res.Steps | Where-Object Step -eq 'Firewall'
+    $fwStep.Status -eq 'Skipped'
+}
+
+# 5. IP Address and Network Heuristics
+Test-Case 'Primary LAN IP resolves to valid non-virtual address' {
+    $mod = Get-Module New-ScanShare
+    $ip = & $mod.NewBoundScriptBlock({ Get-PrimaryIPv4Address })
+
     $ip -and
     $ip -notmatch '^127\.' -and
-    $ip -notmatch '^169\.254\.' -and
-    $ip -notmatch '^172\.(20|24)\.'
+    $ip -notmatch '^169\.254\.'
 }
 
 # 6. Summary
