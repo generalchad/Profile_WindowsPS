@@ -8,8 +8,9 @@
 
     Description          = 'Sets up an SMB scan-to-folder destination for an MFP in one step: local account, folder, NTFS and share permissions, and firewall rules, then verifies it with Test-FileShare. Idempotent and -WhatIf aware.'
 
-    PowerShellVersion    = '7.0'
-    CompatiblePSEditions = @('Core')
+    # Kept 5.1-compatible so it can be copied onto client PCs without PowerShell 7.
+    PowerShellVersion    = '5.1'
+    CompatiblePSEditions = @('Desktop', 'Core')
 
     # Test-FileShare is used for the final verification but is optional: it is
     # autoloaded when present and the step is skipped otherwise.
