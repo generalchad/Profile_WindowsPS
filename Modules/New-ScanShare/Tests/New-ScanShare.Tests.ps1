@@ -147,9 +147,10 @@ Test-Case '-WhatIf does not mutate file system or share state' {
 }
 
 Test-Case '-Password accepts a plain string' {
-    $res = New-ScanShare -UserName 'xerox' -Password 'Morris123!' -WhatIf
+    $user = "scanpw$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $res = New-ScanShare -UserName $user -Password 'Morris123!' -WhatIf
     $accountStep = $res.Steps | Where-Object Step -eq 'Account'
-    $res.Account -eq "$env:COMPUTERNAME\xerox" -and
+    $res.Account -eq "$env:COMPUTERNAME\$user" -and
     $accountStep.Status -eq 'WhatIf'
 }
 
@@ -302,7 +303,52 @@ Test-Case 'Firewall: -RemoteAddress change on existing dedicated rule plans an u
     $fwStep.Detail -like '*10.20.0.0/16*'
 }
 
-# 7. Verification Steps (Listener and Access)
+# 7. NTFS Lockdown Planning
+Test-Case 'NTFS plan: detects inherited broad identities and needed Modify' {
+    $mod = Get-Module New-ScanShare
+    $aces = @(
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'NT AUTHORITY\Authenticated Users' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify },
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'BUILTIN\Users' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute },
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'CREATOR OWNER' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($a) Get-NtfsLockdownPlan -AceList $a -Account 'PC\scanner' -UserName 'scanner' }) $aces
+
+    $plan.Status -eq 'Update' -and
+    $plan.NeedsModify -eq $true -and
+    @($plan.BroadIdentities).Count -eq 3 -and
+    $plan.BroadIdentities -contains 'NT AUTHORITY\Authenticated Users' -and
+    $plan.BroadIdentities -contains 'BUILTIN\Users' -and
+    $plan.BroadIdentities -contains 'CREATOR OWNER'
+}
+
+Test-Case 'NTFS plan: reports Exists when already locked down' {
+    $mod = Get-Module New-ScanShare
+    $aces = @(
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'PC\scanner' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify },
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'NT AUTHORITY\SYSTEM' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl },
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'BUILTIN\Administrators' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($a) Get-NtfsLockdownPlan -AceList $a -Account 'PC\scanner' -UserName 'scanner' }) $aces
+
+    $plan.Status -eq 'Exists' -and
+    $plan.NeedsModify -eq $false -and
+    @($plan.BroadIdentities).Count -eq 0
+}
+
+Test-Case 'NTFS plan: needs Modify when account is missing but folder is otherwise clean' {
+    $mod = Get-Module New-ScanShare
+    $aces = @(
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'NT AUTHORITY\SYSTEM' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl },
+        [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'BUILTIN\Administrators' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($a) Get-NtfsLockdownPlan -AceList $a -Account 'PC\scanner' -UserName 'scanner' }) $aces
+
+    $plan.Status -eq 'Update' -and
+    $plan.NeedsModify -eq $true -and
+    @($plan.BroadIdentities).Count -eq 0
+}
+
+# 8. Verification Steps (Listener and Access)
 Test-Case 'Verification: Listener checks local port and Access reports Skipped without password' {
     $mod = Get-Module New-ScanShare
     $testBlock = {
@@ -406,7 +452,7 @@ Test-Case 'Verification: Access formats error 1219 gracefully' {
     $accessStep.Detail -like '*conflicting network credentials*'
 }
 
-# 8. Summary
+# 9. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1

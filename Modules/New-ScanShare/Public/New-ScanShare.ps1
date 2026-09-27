@@ -9,7 +9,8 @@ function New-ScanShare {
           1. A local account for the MFP to authenticate as (password never expires,
              cannot be changed by the account).
           2. The destination folder.
-          3. NTFS Modify rights on the folder for that account.
+          3. Locks the folder's NTFS permissions to SYSTEM, Administrators, and the
+             scan account (Modify), removing inherited broad entries.
           4. An SMB share granting the account Change access.
           5. The inbound "File and Printer Sharing (SMB-In)" firewall rules.
           6. Verification: checks local SMB listener and validates credentialed
@@ -70,6 +71,10 @@ function New-ScanShare {
     .NOTES
         Requires elevation. The account is local to this PC; on the copier use
         "<PC name>\<UserName>" (or just the user name on most models) as the login.
+
+        The scan folder's NTFS permissions are locked down to SYSTEM (Full control),
+        Administrators (Full control), and the scan account (Modify). Inherited broad
+        entries (Everyone, Authenticated Users, Users, Creator Owner) are removed.
 
         Supported platforms: Windows 10, Windows 11, and Windows Server 2016+
         (64-bit only). Older Windows (7/8/8.1, Server 2008 R2/2012/2012 R2) lack
@@ -215,27 +220,34 @@ function New-ScanShare {
     try {
         if (Test-Path -LiteralPath $Path -PathType Container) {
             $acl = Get-Acl -LiteralPath $Path
+            $plan = Get-NtfsLockdownPlan -AceList @($acl.Access) -Account $account -UserName $UserName
             $modify = [System.Security.AccessControl.FileSystemRights]::Modify
-            $hasModify = $acl.Access | Where-Object {
-                $_.IdentityReference.Value -in $account, $UserName -and
-                $_.AccessControlType -eq 'Allow' -and
-                ($_.FileSystemRights -band $modify) -eq $modify
+
+            if ($plan.Status -eq 'Exists') {
+                & $addStep 'NTFS' 'Exists' "$account has Modify (folder locked down)"
             }
-            if ($hasModify) {
-                & $addStep 'NTFS' 'Exists' "$account has Modify"
-            }
-            elseif ($PSCmdlet.ShouldProcess($Path, "Grant Modify to $account")) {
-                $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
-                    $account, $modify, 'ContainerInherit, ObjectInherit', 'None', 'Allow')
-                $acl.AddAccessRule($rule)
+            elseif ($PSCmdlet.ShouldProcess($Path, "Lock down NTFS and grant Modify to $account")) {
+                # Break inheritance but keep the inherited entries as explicit copies so
+                # SYSTEM/Administrators survive; the broad identities are purged below.
+                if ($acl.PSObject.Properties['AreAccessRulesProtected'] -and -not $acl.AreAccessRulesProtected) {
+                    $acl.SetAccessRuleProtection($true, $true)
+                }
+                foreach ($ace in $plan.BroadAces) {
+                    $null = $acl.PurgeAccessRules($ace.IdentityReference)
+                }
+                if ($plan.NeedsModify) {
+                    $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+                        $account, $modify, 'ContainerInherit, ObjectInherit', 'None', 'Allow')
+                    $acl.AddAccessRule($rule)
+                }
                 Set-Acl -LiteralPath $Path -AclObject $acl -ErrorAction Stop
-                & $addStep 'NTFS' 'Created' "Modify granted to $account"
+                & $addStep 'NTFS' 'Updated' "locked down; Modify granted to $account"
             }
-            else { & $addStep 'NTFS' 'WhatIf' "would grant Modify to $account" }
+            else { & $addStep 'NTFS' 'WhatIf' "would lock down NTFS and grant Modify to $account" }
         }
         else {
             $status = if ($dryRun) { 'WhatIf' } else { 'Skipped' }
-            $detail = if ($dryRun) { "would grant Modify to $account" } else { "folder '$Path' missing" }
+            $detail = if ($dryRun) { "would lock down NTFS and grant Modify to $account" } else { "folder '$Path' missing" }
             & $addStep 'NTFS' $status $detail
         }
     }
