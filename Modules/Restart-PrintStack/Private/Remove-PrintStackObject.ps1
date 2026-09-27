@@ -382,7 +382,11 @@ function Set-DefaultPrintQueue {
         if (-not $target) { $target = $candidates[0] }
     }
 
-    $command = "(Get-CimInstance Win32_Printer -Filter `"Name='$($target.Name)'`").SetDefaultPrinter()"
+    # WQL uses backslash as its escape character, so '\\server\queue' names must
+    # have backslashes doubled before quotes are escaped - otherwise the filter
+    # matches nothing.
+    $wqlName = $target.Name -replace '\\', '\\' -replace "'", "\'"
+    $command = "(Get-CimInstance Win32_Printer -Filter `"Name='$wqlName'`").SetDefaultPrinter()"
 
     if ($DryRun) {
         return Write-StepResult -Step 'Set default printer' -Target $target.Name -Method 'CIM' `
@@ -391,7 +395,7 @@ function Set-DefaultPrintQueue {
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     try {
-        $printer = Get-CimInstance -ClassName Win32_Printer -Filter "Name = '$($target.Name -replace "'", "\'")'" -ErrorAction Stop |
+        $printer = Get-CimInstance -ClassName Win32_Printer -Filter "Name = '$wqlName'" -ErrorAction Stop |
             Select-Object -First 1
         if (-not $printer) { throw "Printer '$($target.Name)' could not be located." }
 
