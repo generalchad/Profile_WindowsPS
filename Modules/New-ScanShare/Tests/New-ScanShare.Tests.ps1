@@ -106,9 +106,17 @@ Test-Case 'Path normalizes trailing slash in -WhatIf simulation' {
     $res.Path -eq 'C:\Scans'
 }
 
-Test-Case 'Preserves filesystem root path without stripping separator' {
-    $res = New-ScanShare -Path 'C:\' -ShareName 'Scans' -WhatIf
-    $res.Path -eq 'C:\'
+Test-Case 'Rejects filesystem drive root with terminating error' {
+    try {
+        New-ScanShare -Path 'C:\' -ShareName 'Scans' -WhatIf -ErrorAction Stop
+        $false
+    }
+    catch [System.ArgumentException] {
+        $true
+    }
+    catch {
+        $_.FullyQualifiedErrorId -like '*DriveRootNotAllowed*'
+    }
 }
 
 Test-Case 'Relative path resolves against current PowerShell location' {

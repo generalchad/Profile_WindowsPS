@@ -92,11 +92,17 @@ function New-ScanShare {
 
     $resolvedPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($Path)
     $root = [System.IO.Path]::GetPathRoot($resolvedPath)
-    if ($resolvedPath -ne $root) {
-        $Path = $resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    } else {
-        $Path = $resolvedPath
+    if ($resolvedPath -eq $root) {
+        $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+            [System.ArgumentException]::new("Path '$Path' is a filesystem root. New-ScanShare requires a dedicated subfolder (e.g. 'C:\Scans') to prevent exposing entire drives."),
+            'DriveRootNotAllowed',
+            [System.Management.Automation.ErrorCategory]::InvalidArgument,
+            $Path
+        )
+        $PSCmdlet.ThrowTerminatingError($errorRecord)
     }
+
+    $Path = $resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 
     $dryRun = [bool]$WhatIfPreference
 
