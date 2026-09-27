@@ -29,9 +29,11 @@ function New-ScanShare {
         Local account the MFP authenticates as. Defaults to "scanner".
 
     .PARAMETER Password
-        Password for the account, as a SecureString. Prompted for when a new
-        account is created and none is supplied. Ignored for an existing account
-        unless -ResetPassword is given.
+        Password for the account, as a SecureString or a plain string (converted
+        internally). Prompted for when a new account is created and none is
+        supplied. Ignored for an existing account unless -ResetPassword is given.
+        A plain string is visible in the process list, so prefer a SecureString
+        for anything sensitive.
 
     .PARAMETER ResetPassword
         Set -Password on an account that already exists.
@@ -88,7 +90,7 @@ function New-ScanShare {
         [ValidatePattern('^[^\\/"\[\]:|<>+=;,?*@]{1,20}$')]
         [string]$UserName = 'scanner',
 
-        [securestring]$Password,
+        [object]$Password,
 
         [switch]$ResetPassword,
 
@@ -97,6 +99,10 @@ function New-ScanShare {
 
         [switch]$SkipFirewall
     )
+
+    if ($Password -is [string]) {
+        $Password = ConvertTo-SecureString -String $Password -AsPlainText -Force
+    }
 
     $resolvedPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($Path)
     $root = [System.IO.Path]::GetPathRoot($resolvedPath)
