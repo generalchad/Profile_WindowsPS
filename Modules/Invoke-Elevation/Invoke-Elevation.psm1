@@ -20,4 +20,4 @@ foreach ($file in @($private + $public)) {
     }
 }
 
-Export-ModuleMember -Function $public.BaseName -Alias 'el', 'isudo', 'elevate'
+Export-ModuleMember -Function $public.BaseName -Alias 'el', 'isudo', 'elevate', 'uel'

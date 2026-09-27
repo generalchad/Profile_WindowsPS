@@ -52,10 +52,10 @@ Test-Case 'Manifest parses without AST errors' {
     $null -eq $e -or $e.Count -eq 0
 }
 
-Test-Case 'Module imports cleanly and exports Invoke-Elevation + alias el' {
+Test-Case 'Module imports cleanly and exports both elevation functions' {
     Import-Module $manifestPath -Force
-    $cmd = Get-Command -Module Invoke-Elevation
-    $cmd.Count -eq 1 -and $cmd[0].Name -eq 'Invoke-Elevation'
+    $names = @(Get-Command -Module Invoke-Elevation | ForEach-Object Name)
+    $names.Count -eq 2 -and $names -contains 'Invoke-Elevation' -and $names -contains 'Invoke-Unelevation'
 }
 
 Test-Case 'Defines the el alias and CloseCurrent parameter' {
@@ -68,14 +68,26 @@ Test-Case 'CloseCurrent exposes the x alias' {
     $cmd.Parameters['CloseCurrent'].Aliases -contains 'x'
 }
 
-Test-Case 'Defines a positional Close parameter that accepts x' {
+Test-Case 'Defines positional Flag and Flag2 parameters (alias Close) accepting x and u' {
     $cmd = Get-Command Invoke-Elevation
-    $param = $cmd.Parameters['Close']
-    $positional = $param.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
-    $validateSet = $param.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
-    $param.ParameterType -eq [string] -and
-    $positional.Position -eq 0 -and
-    $validateSet.ValidValues -contains 'x'
+    $flag = $cmd.Parameters['Flag']
+    $flag2 = $cmd.Parameters['Flag2']
+    $pos0 = $flag.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
+    $pos1 = $flag2.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
+    $validate = $flag.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
+    $flag.ParameterType -eq [string] -and
+    $flag.Aliases -contains 'Close' -and
+    $pos0.Position -eq 0 -and
+    $pos1.Position -eq 1 -and
+    $validate.ValidValues -contains 'x' -and
+    $validate.ValidValues -contains 'u'
+}
+
+Test-Case 'Unelevate exposes the u alias and lives in both parameter sets' {
+    $cmd = Get-Command Invoke-Elevation
+    $param = $cmd.Parameters['Unelevate']
+    $sets = @($param.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] } | ForEach-Object ParameterSetName)
+    $param.Aliases -contains 'u' -and $sets -contains 'Elevate' -and $sets -contains 'Run'
 }
 
 Test-Case 'Exports el, isudo and elevate aliases for Invoke-Elevation' {
@@ -94,9 +106,9 @@ Test-Case 'ScriptBlock is positional 0, mandatory, in the Run parameter set' {
     $attr.ParameterSetName -eq 'Run'
 }
 
-Test-Case 'Close belongs to the Elevate parameter set' {
+Test-Case 'Flag belongs to the Elevate parameter set' {
     $cmd = Get-Command Invoke-Elevation
-    $attr = $cmd.Parameters['Close'].Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
+    $attr = $cmd.Parameters['Flag'].Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
     $attr.ParameterSetName -eq 'Elevate'
 }
 
@@ -282,6 +294,7 @@ Test-Case 'Inside Windows Terminal runs a script block elevated via -EncodedComm
         }
         $res = & $mod.NewBoundScriptBlock($testBlock)
 
+        $expectedHost = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
         $m = [regex]::Match($res.Args, '-EncodedCommand\s+([A-Za-z0-9+/=]+)')
         $decoded = if ($m.Success) { [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value)) } else { $null }
 
@@ -289,7 +302,7 @@ Test-Case 'Inside Windows Terminal runs a script block elevated via -EncodedComm
         $res.Verb -eq 'RunAs' -and
         $res.Args -like '*-p "*' -and
         $res.Args -like '*-d "*' -and
-        $res.Args -like '*-- pwsh*' -and
+        $res.Args -like "*-- $expectedHost*" -and
         $decoded -eq "New-ScanShare -Path 'D:\Scans' -ShareName 'Scans'"
     }
     finally {
@@ -333,7 +346,187 @@ Test-Case 'Outside Windows Terminal runs a script block elevated via pwsh -Encod
     }
 }
 
-# 4. Summary
+# 4. Unelevation
+Test-Case 'Keeps the -Close x named shorthand' {
+    $mod = Get-Module Invoke-Elevation
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Start-Process { throw 'Start-Process must not be called when already elevated' }
+        Invoke-Elevation -Close x
+        $true
+    }
+    (& $mod.NewBoundScriptBlock($testBlock)) -eq $true
+}
+
+Test-Case 'No unelevation launch when already unelevated' {
+    $mod = Get-Module Invoke-Elevation
+    $testBlock = {
+        function Test-Elevation { $false }
+        function Start-Process { throw 'Start-Process must not be called when already unelevated' }
+        Invoke-Elevation u
+        $true
+    }
+    (& $mod.NewBoundScriptBlock($testBlock)) -eq $true
+}
+
+Test-Case 'Accepts the combined u x positional shorthand' {
+    $mod = Get-Module Invoke-Elevation
+    $testBlock = {
+        function Test-Elevation { $false }
+        function Start-Process { throw 'Start-Process must not be called when already unelevated' }
+        Invoke-Elevation u x
+        $true
+    }
+    (& $mod.NewBoundScriptBlock($testBlock)) -eq $true
+}
+
+Test-Case 'From elevated, bare u launches runas /trustlevel for the host' {
+    $oldSession = $env:WT_SESSION
+    try {
+        $env:WT_SESSION = $null
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $true }
+            function Start-Process {
+                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
+                $script:capture = [pscustomobject]@{
+                    FilePath    = $FilePath
+                    Args        = $ArgumentList
+                    WindowStyle = $WindowStyle
+                }
+                [pscustomobject]@{ Id = 7 }
+            }
+            Invoke-Elevation u
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+        $expectedHost = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+
+        $res.FilePath -eq 'runas.exe' -and
+        $res.Args -like '/trustlevel:0x20000 *' -and
+        $res.Args -like "*$expectedHost*" -and
+        $res.WindowStyle -eq 'Hidden'
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+    }
+}
+
+Test-Case 'From elevated, the -Unelevate switch launches runas /trustlevel' {
+    $oldSession = $env:WT_SESSION
+    try {
+        $env:WT_SESSION = $null
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $true }
+            function Start-Process {
+                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
+                [pscustomobject]@{ Id = 8 }
+            }
+            Invoke-Elevation -Unelevate
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+
+        $res.FilePath -eq 'runas.exe' -and $res.Args -like '/trustlevel:0x20000*'
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+    }
+}
+
+Test-Case 'Unelevating inside Windows Terminal targets wt.exe with escaped quotes' {
+    $oldSession = $env:WT_SESSION
+    $oldProfile = $env:WT_PROFILE_ID
+    try {
+        $env:WT_SESSION = 'test-session'
+        $env:WT_PROFILE_ID = '{00000000-0000-0000-0000-000000000001}'
+
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $true }
+            function Get-Command { [pscustomobject]@{ Source = 'C:\WindowsApps\wt.exe' } }
+            function Start-Process {
+                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
+                [pscustomobject]@{ Id = 9 }
+            }
+            Invoke-Elevation u
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+
+        $res.FilePath -eq 'runas.exe' -and
+        $res.Args -like '/trustlevel:0x20000 *' -and
+        $res.Args -like '*C:\WindowsApps\wt.exe*' -and
+        $res.Args -like '*-p \"*' -and
+        $res.Args -like '*-d \"*'
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+        $env:WT_PROFILE_ID = $oldProfile
+    }
+}
+
+Test-Case 'Unelevate accepts a script block via -u' {
+    $oldSession = $env:WT_SESSION
+    try {
+        $env:WT_SESSION = $null
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $true }
+            function Start-Process {
+                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
+                [pscustomobject]@{ Id = 11 }
+            }
+            Invoke-Elevation -u { Write-Output 'hi' }
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+        $m = [regex]::Match($res.Args, '-EncodedCommand\s+([A-Za-z0-9+/=]+)')
+        $decoded = if ($m.Success) { [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value)) } else { $null }
+
+        $res.FilePath -eq 'runas.exe' -and
+        $res.Args -like '/trustlevel:0x20000*' -and
+        $decoded -eq "Write-Output 'hi'"
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+    }
+}
+
+Test-Case 'Exports the uel alias for Invoke-Unelevation' {
+    Import-Module $manifestPath -Force
+    (Get-Alias -Name uel -ErrorAction SilentlyContinue).Definition -eq 'Invoke-Unelevation'
+}
+
+Test-Case 'uel launches an unelevated session from an elevated one' {
+    $oldSession = $env:WT_SESSION
+    try {
+        $env:WT_SESSION = $null
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $true }
+            function Start-Process {
+                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
+                [pscustomobject]@{ Id = 10 }
+            }
+            Invoke-Unelevation
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+
+        $res.FilePath -eq 'runas.exe' -and $res.Args -like '/trustlevel:0x20000*'
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+    }
+}
+
+# 5. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1

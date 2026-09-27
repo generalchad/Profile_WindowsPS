@@ -48,7 +48,7 @@ time one of them is used.
 | `Get-CustomModule` | Lists the profile's custom modules with their version, description, and exported commands. |
 | `Get-NetworkDiagnostics` | One-shot site network triage: adapter state, DNS resolution, reachability, egress, and ticket export. |
 | `Get-PrinterInfo` | SNMP query of a printer/MFP: model, serial, page count, status, supply levels. No external tools. |
-| `Invoke-Elevation` | Relaunches the current Windows Terminal session elevated, reusing the same profile and working directory; falls back to an elevated PowerShell host outside Windows Terminal. |
+| `Invoke-Elevation` | Relaunches the current Windows Terminal session elevated or unelevated (`-Unelevate`/`u`, `runas /trustlevel`), reusing the same profile and working directory; `Invoke-Unelevation`/`uel` is the unelevated counterpart. Falls back to a new PowerShell host outside Windows Terminal. |
 | `New-ScanShare` | One-step SMB scan-to-folder setup (hardened local account locked to SMB network logon, folder, NTFS lockdown, `Everyone: Full Control` share, firewall), verified with a listener check and a credentialed write probe. Ships an optional `Show-ScanShare` WinForms dialog that drives it (loaded only when opened). Runs on PS 7 and Windows PowerShell 5.1; Windows 10/11/Server 2016+ (64-bit). |
 | `Optimize-PSX` | Extracts disc-image archives and compresses PS1/PS2, Saturn, and Dreamcast images to CHD. |
 | `Optimize-VMX` | Tunes VMware `.vmx` files for network stability and legacy-OS compatibility. |
