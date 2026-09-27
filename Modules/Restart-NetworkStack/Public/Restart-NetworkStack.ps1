@@ -166,7 +166,7 @@ function Restart-NetworkStack {
         Author  : GenChadt
         Requires: Administrator rights for everything except a plain DNS cache flush.
     #>
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium', DefaultParameterSetName = 'Selective')]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High', DefaultParameterSetName = 'Selective')]
     [Alias('rns', 'Reset-NetworkStack')]
     [OutputType('RestartNetworkStack.StepResult')]
     param(
@@ -305,9 +305,9 @@ function Restart-NetworkStack {
             }
             Write-Host ''
 
-            if (-not $PSCmdlet.ShouldContinue(
-                    'Proceed with these destructive changes?',
-                    'Restart-NetworkStack')) {
+            if (-not $PSCmdlet.ShouldProcess(
+                    'the requested destructive network stack steps',
+                    'Reset')) {
                 Write-Host 'Cancelled - nothing was changed.' -ForegroundColor Cyan
                 return
             }
