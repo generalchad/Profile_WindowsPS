@@ -6,7 +6,7 @@
     CompanyName          = 'Unknown'
     Copyright            = '(c) GenChadT. All rights reserved.'
 
-    Description          = 'Relaunches the current Windows Terminal session as Administrator, reusing the same profile and working directory. Falls back to an elevated PowerShell host outside Windows Terminal.'
+    Description          = 'Relaunches the current Windows Terminal session as Administrator, reusing the same profile and working directory, or runs a script block elevated. Falls back to an elevated PowerShell host outside Windows Terminal.'
 
     PowerShellVersion    = '5.1'
     CompatiblePSEditions = @('Desktop', 'Core')
@@ -16,7 +16,7 @@
     FunctionsToExport    = @('Invoke-Elevation')
     CmdletsToExport      = @()
     VariablesToExport    = @()
-    AliasesToExport      = @('el')
+    AliasesToExport      = @('el', 'isudo', 'elevate')
 
     PrivateData          = @{
         PSData = @{
@@ -27,7 +27,10 @@
 - Initial release.
 - Relaunches the current Windows Terminal profile/directory elevated via wt.exe.
 - Falls back to an elevated pwsh/powershell host outside Windows Terminal.
-- -CloseCurrent exits the current session after the elevated window opens.
+- -ScriptBlock { ... } runs a command in the elevated session (passed via -EncodedCommand).
+- -CloseCurrent exits the current session after the elevated window opens; -x and a
+  bare positional x are accepted as shorthand.
+- Aliases: el, isudo, elevate.
 - UAC cancellation reports a warning instead of throwing.
 '@
         }
