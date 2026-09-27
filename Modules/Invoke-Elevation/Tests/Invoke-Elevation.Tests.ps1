@@ -63,6 +63,43 @@ Test-Case 'Defines the el alias and CloseCurrent parameter' {
     $cmd.Parameters.ContainsKey('CloseCurrent')
 }
 
+Test-Case 'CloseCurrent exposes the x alias' {
+    $cmd = Get-Command Invoke-Elevation
+    $cmd.Parameters['CloseCurrent'].Aliases -contains 'x'
+}
+
+Test-Case 'Defines a positional Close parameter that accepts x' {
+    $cmd = Get-Command Invoke-Elevation
+    $param = $cmd.Parameters['Close']
+    $positional = $param.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] }
+    $validateSet = $param.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
+    $param.ParameterType -eq [string] -and
+    $positional.Position -eq 0 -and
+    $validateSet.ValidValues -contains 'x'
+}
+
+Test-Case 'Binds the bare x positional value' {
+    $mod = Get-Module Invoke-Elevation
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Start-Process { throw 'Start-Process must not be called when already elevated' }
+        Invoke-Elevation x
+        $true
+    }
+    (& $mod.NewBoundScriptBlock($testBlock)) -eq $true
+}
+
+Test-Case 'Binds the -x switch alias' {
+    $mod = Get-Module Invoke-Elevation
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Start-Process { throw 'Start-Process must not be called when already elevated' }
+        Invoke-Elevation -x
+        $true
+    }
+    (& $mod.NewBoundScriptBlock($testBlock)) -eq $true
+}
+
 # 2. Elevation launch logic (Start-Process mocked)
 Test-Case 'No launch when already elevated' {
     $mod = Get-Module Invoke-Elevation
