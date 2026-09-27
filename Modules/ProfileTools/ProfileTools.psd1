@@ -2,7 +2,9 @@
     RootModule        = 'ProfileTools.psm1'
     ModuleVersion     = '1.0.0'
     GUID              = '3b9f7e2d-4c1a-4f6e-9b2d-8a1c5e7f0d4b'
-    Author            = 'TimothyWBrown'
+    Author            = 'Timothy W. Brown'
+    CompanyName       = 'Timothy W. Brown'
+    Copyright         = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
     Description       = 'Personal PowerShell toolbox: functions, utilities and static aliases loaded on demand via command autoload.'
     PowerShellVersion = '7.0'
 

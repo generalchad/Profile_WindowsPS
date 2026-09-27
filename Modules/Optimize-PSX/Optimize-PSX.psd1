@@ -17,13 +17,13 @@ CompatiblePSEditions = @('Core')
 GUID = '940e5974-a530-4623-8a4d-9977e20e2c23'
 
 # Author of this module
-Author = 'GenChadT'
+Author = 'Timothy W. Brown'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'Timothy W. Brown'
 
 # Copyright statement for this module
-Copyright = '(c) GenChadT. All rights reserved.'
+Copyright = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Extracts disc image archives and compresses PS1/PS2, Saturn and Dreamcast images into CHD files using chdman, with parallel conversion, cue/gdi validation and verified source cleanup.'

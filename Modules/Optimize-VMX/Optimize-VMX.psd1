@@ -20,13 +20,13 @@ CompatiblePSEditions = @('Desktop', 'Core')
 GUID = '41c6ab0b-8f28-44d0-ada6-f69c0d4d84d1'
 
 # Author of this module
-Author = 'GenChadT'
+Author = 'Timothy W. Brown'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'Timothy W. Brown'
 
 # Copyright statement for this module
-Copyright = '(c) GenChadT. All rights reserved.'
+Copyright = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Optimizes VMware .vmx configuration files for network stability and legacy OS compatibility. Configures optimal network adapters (vmxnet3/e1000/vlance) based on guestOS, pins hardware versions for legacy operating systems, and ensures time synchronization is enabled.'

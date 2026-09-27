@@ -1,5 +1,8 @@
 # -----------------------------------------------------------------------------
 # Microsoft.PowerShell_profile.ps1 - The Optimized Loader
+#
+# Authored by Timothy W. Brown with the assistance of large language models,
+# including Anthropic Claude, Google Gemini, and DeepSeek.
 # -----------------------------------------------------------------------------
 $ProfileRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($PROFILE) { Split-Path -Parent $PROFILE } else { $PSScriptRoot }
 if (-not $ProfileRoot) { $ProfileRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }

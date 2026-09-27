@@ -21,13 +21,13 @@ ModuleVersion = '0.0.1'
 GUID = 'ec37fcc4-ebaa-4d15-8bfa-df9a9cec0cbe'
 
 # Author of this module
-Author = 'GenChadT'
+Author = 'Timothy W. Brown'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'Timothy W. Brown'
 
 # Copyright statement for this module
-Copyright = '(c) GenChadT. All rights reserved.'
+Copyright = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Tests SMB and FTP/SFTP/FTPS connectivity for MFP Scan-to-Folder troubleshooting.'

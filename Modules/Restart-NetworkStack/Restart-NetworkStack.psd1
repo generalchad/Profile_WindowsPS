@@ -2,9 +2,9 @@
     RootModule           = 'Restart-NetworkStack.psm1'
     ModuleVersion        = '1.0.0'
     GUID                 = '6168d03a-fd8f-48e4-aa3f-1e84d8525b2d'
-    Author               = 'GenChadt'
-    CompanyName          = 'Unknown'
-    Copyright            = '(c) GenChadT. All rights reserved.'
+    Author               = 'Timothy W. Brown'
+    CompanyName          = 'Timothy W. Brown'
+    Copyright            = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
     Description          = 'Resets and refreshes the Windows network stack - DNS, DHCP, adapters, Winsock, TCP/IP, firewall, proxy, ARP and NetBIOS - from a single opt-in cmdlet. Prefers native PowerShell cmdlets and falls back to ipconfig/netsh/nbtstat where no cmdlet equivalent exists.'
 

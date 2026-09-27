@@ -117,6 +117,13 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
   set `window.restoreWindows: "none"`, `window.openFoldersInNewWindow: "off"`, and
   `window.openFilesInNewWindow: "off"` in `Code - Insiders\User\settings.json`.
 
+## Authorship
+
+Authored by **Timothy W. Brown** with the assistance of large language models,
+including Anthropic Claude, Google Gemini, and DeepSeek. AI assistance covers
+implementation, review, and documentation; the author reviews and owns every
+change.
+
 ## Housekeeping
 
 - `.gitignore` is deny-all/whitelist: `AGENTS.md`, `CONTEXT.md`, `ROADMAP.md`, and

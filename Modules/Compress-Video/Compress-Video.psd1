@@ -19,13 +19,13 @@ CompatiblePSEditions = @('Core')
 GUID = 'b7e4f1a2-6c3d-4e9a-9f1b-2d5e8a7c4f10'
 
 # Author of this module
-Author = 'GenChadT'
+Author = 'Timothy W. Brown'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'Timothy W. Brown'
 
 # Copyright statement for this module
-Copyright = '(c) GenChadT. All rights reserved.'
+Copyright = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Batch compresses video files with FFmpeg. Supports auto-detected GPU hardware acceleration (NVENC/QSV/AMF) with CPU (libx265) fallback, ffprobe-based resume/skip detection so interrupted runs never redo finished work, throttled parallel execution with conservative safe defaults, reduced process priority so compression never saturates the machine, and persistent JSON configuration via Get-/Set-CompressVideoConfig.'

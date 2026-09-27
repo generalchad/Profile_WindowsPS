@@ -21,13 +21,13 @@ ModuleVersion = '0.0.3'
 GUID = '7b4333fd-a192-4e95-ba1a-f0031bcadab8'
 
 # Author of this module
-Author = 'GenChadT'
+Author = 'Timothy W. Brown'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'Timothy W. Brown'
 
 # Copyright statement for this module
-Copyright = '(c) GenChadT. All rights reserved.'
+Copyright = '(c) Timothy W. Brown. Authored with LLM assistance (Anthropic Claude, Google Gemini, DeepSeek). All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Tests UDP port connectivity, with built-in game-server query packets (Source/A2S, Quake, Minecraft Bedrock, SA-MP, ASE, and more).'
