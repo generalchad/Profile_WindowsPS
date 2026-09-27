@@ -146,6 +146,13 @@ Test-Case '-WhatIf does not mutate file system or share state' {
     -not (Test-Path -LiteralPath $testFolder)
 }
 
+Test-Case '-Password accepts a plain string' {
+    $res = New-ScanShare -UserName 'xerox' -Password 'Morris123!' -WhatIf
+    $accountStep = $res.Steps | Where-Object Step -eq 'Account'
+    $res.Account -eq "$env:COMPUTERNAME\xerox" -and
+    $accountStep.Status -eq 'WhatIf'
+}
+
 Test-Case '-ResetPassword with -WhatIf does not prompt for input' {
     # Existing local user (e.g. Administrator or Guest) should report WhatIf without blocking on Read-Host
     $firstUser = Get-LocalUser | Select-Object -First 1
