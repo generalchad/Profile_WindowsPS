@@ -26,6 +26,8 @@
 !Modules/Format-UsbDrive/**
 !Modules/Get-PrinterInfo/
 !Modules/Get-PrinterInfo/**
+!Modules/New-ScanShare/
+!Modules/New-ScanShare/**
 !Modules/Compress-Video/
 !Modules/Compress-Video/**
 !Modules/Optimize-PSX/
