@@ -224,6 +224,9 @@ function Restart-NetworkStack {
     )
 
     begin {
+        # Initialized up front: begin returns early when unelevated or cancelled, and
+        # process/end read this under StrictMode, where an unset variable throws.
+        $proceed = $false
         $rebootRequired = $false
         $results = [System.Collections.Generic.List[object]]::new()
         $backupRoot = $null
