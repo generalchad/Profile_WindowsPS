@@ -66,12 +66,40 @@ function Show-ScanShare {
     $form.MinimizeBox = $false
     $form.Font = [System.Drawing.Font]::new('Segoe UI', 9)
 
+    function New-InfoButton {
+        param(
+            [Parameter(Mandatory)][string]$Text,
+            [Parameter(Mandatory)][string]$Title,
+            [Parameter(Mandatory)][int]$Left,
+            [Parameter(Mandatory)][int]$Top
+        )
+
+        $button = [System.Windows.Forms.Button]::new()
+        $button.Text = [char]0x2139
+        $button.Font = [System.Drawing.Font]::new('Segoe UI Symbol', 9)
+        $button.Location = [System.Drawing.Point]::new($Left, $Top)
+        $button.Size = [System.Drawing.Size]::new(24, 24)
+        $button.TabStop = $false
+        $button.Tag = [pscustomobject]@{ Title = $Title; Detail = $Text }
+        $form.Controls.Add($button)
+        $toolTip.SetToolTip($button, 'Show detailed help')
+        $button.Add_Click({
+            param($sender, $e)
+            [System.Windows.Forms.MessageBox]::Show($sender.Tag.Detail, $sender.Tag.Title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+        })
+
+        return $button
+    }
+
     function New-LabeledInput {
         param(
             [Parameter(Mandatory)][string]$Label,
             [Parameter(Mandatory)][int]$Top,
-            [Parameter()][int]$Width = 495,
-            [Parameter()][switch]$Password
+            [Parameter()][int]$Width = 448,
+            [Parameter()][switch]$Password,
+            [Parameter()][string]$Hint,
+            [Parameter()][string]$Info,
+            [Parameter()][int]$InfoLeft = 608
         )
 
         $caption = [System.Windows.Forms.Label]::new()
@@ -85,7 +113,10 @@ function Show-ScanShare {
         $box.Location = [System.Drawing.Point]::new(152, $Top)
         $box.Size = [System.Drawing.Size]::new($Width, 23)
         if ($Password) { $box.UseSystemPasswordChar = $true }
+        if ($Hint) { $toolTip.SetToolTip($box, $Hint) }
         $form.Controls.Add($box)
+
+        if ($Info) { $null = New-InfoButton -Text $Info -Title $Label -Left $InfoLeft -Top $Top }
 
         return $box
     }
@@ -93,14 +124,21 @@ function Show-ScanShare {
     function New-Option {
         param(
             [Parameter(Mandatory)][string]$Text,
-            [Parameter(Mandatory)][int]$Top
+            [Parameter(Mandatory)][int]$Top,
+            [Parameter()][int]$Width = 448,
+            [Parameter()][string]$Hint,
+            [Parameter()][string]$Info,
+            [Parameter()][int]$InfoLeft = 608
         )
 
         $check = [System.Windows.Forms.CheckBox]::new()
         $check.Text = $Text
         $check.Location = [System.Drawing.Point]::new(152, $Top)
-        $check.Size = [System.Drawing.Size]::new(440, 22)
+        $check.Size = [System.Drawing.Size]::new($Width, 22)
+        if ($Hint) { $toolTip.SetToolTip($check, $Hint) }
         $form.Controls.Add($check)
+
+        if ($Info) { $null = New-InfoButton -Text $Info -Title $Text -Left $InfoLeft -Top $Top }
 
         return $check
     }
@@ -139,16 +177,17 @@ function Show-ScanShare {
         return $button
     }
 
-    $txtPath = New-LabeledInput -Label 'Destination folder' -Top 18 -Width 400
+    $txtPath = New-LabeledInput -Label 'Destination folder' -Top 18 -Width 352 `
+        -Hint 'Folder that receives scans' `
+        -Info 'Full path that receives scans, e.g. C:\Scans. Created if it does not exist. It must be a dedicated subfolder, not a drive root such as C:\. Use Browse to pick an existing folder.'
     $txtPath.Text = 'C:\Scans'
-    $toolTip.SetToolTip($txtPath, 'Full path that receives scans, e.g. C:\Scans. Created if missing. It must be a dedicated subfolder, not a drive root such as C:\.')
 
     $btnBrowse = [System.Windows.Forms.Button]::new()
     $btnBrowse.Text = 'Browse...'
-    $btnBrowse.Location = [System.Drawing.Point]::new(560, 16)
-    $btnBrowse.Size = [System.Drawing.Size]::new(88, 25)
+    $btnBrowse.Location = [System.Drawing.Point]::new(510, 16)
+    $btnBrowse.Size = [System.Drawing.Size]::new(90, 25)
     $form.Controls.Add($btnBrowse)
-    $toolTip.SetToolTip($btnBrowse, 'Pick an existing folder, or create one, as the scan destination.')
+    $toolTip.SetToolTip($btnBrowse, 'Pick a folder')
 
     $btnBrowse.Add_Click({
         $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
@@ -169,43 +208,51 @@ function Show-ScanShare {
 
     $null = New-Hint -Top 44 -Text 'Full path (e.g. C:\Scans). Created if missing. Browse to pick a folder.'
 
-    $txtShare = New-LabeledInput -Label 'Share name' -Top 72
+    $txtShare = New-LabeledInput -Label 'Share name' -Top 72 `
+        -Hint 'Name the copier connects to' `
+        -Info 'Name the copier connects to (default "Scans"). Up to 80 characters; avoid \ / : * ? " < > | [ ] ; = + ,'
     $txtShare.Text = 'Scans'
-    $toolTip.SetToolTip($txtShare, 'Name the copier connects to (default "Scans"). Up to 80 characters; avoid \ / : * ? " < > | [ ] ; = + ,')
-    $txtUser = New-LabeledInput -Label 'User name' -Top 104
+    $txtUser = New-LabeledInput -Label 'User name' -Top 104 `
+        -Hint 'Account the copier signs in as' `
+        -Info 'Local account the copier signs in as (default "scanner"). Up to 20 characters; avoid \ / " [ ] : | < > + = ; , ? * @'
     $txtUser.Text = 'scanner'
-    $toolTip.SetToolTip($txtUser, 'Local account the copier signs in as. Up to 20 characters; avoid \ / " [ ] : | < > + = ; , ? * @')
-    $txtPassword = New-LabeledInput -Label 'Password' -Top 136 -Width 300 -Password
-    $toolTip.SetToolTip($txtPassword, 'Password for that account. Required for a new or reset account: Windows blocks network (SMB) logons for accounts with blank passwords.')
+    $txtPassword = New-LabeledInput -Label 'Password' -Top 136 -Width 300 -Password `
+        -Hint 'Password for that account' `
+        -Info 'Password for that account. Required for a new or reset account: Windows blocks network (SMB) logons for accounts with blank passwords.'
 
     $null = New-Hint -Top 164 -Height 34 -Text 'Quotation marks are not required. Share name: max 80 chars. User name: max 20 chars. Avoid \ / : * ? " < > | [ ] ; = + , @'
 
-    $txtRemote = New-LabeledInput -Label 'Remote address' -Top 202
-    $toolTip.SetToolTip($txtRemote, 'Optional. Source IP range allowed to reach SMB port 445. Blank = LocalSubnet; use a subnet such as 10.20.0.0/16, or Any to allow every network.')
+    $txtRemote = New-LabeledInput -Label 'Remote address' -Top 202 `
+        -Hint 'Allowed source IP range' `
+        -Info 'Optional. Source IP range allowed to reach SMB port 445. Blank = LocalSubnet; use a subnet such as 10.20.0.0/16 if the copier is on another VLAN, or Any to allow every network.'
 
     $null = New-Hint -Top 226 -Height 32 -Text 'Optional. Source IP range allowed to scan. Blank = LocalSubnet; e.g. 10.20.0.0/16 or Any.'
 
-    $chkReset = New-Option -Text 'Reset password of an existing account' -Top 264
-    $toolTip.SetToolTip($chkReset, 'Sets a new password on an account that already exists. Leave clear to reuse the account and its current password.')
-    $chkSkipHardening = New-Option -Text 'Skip account hardening (-SkipAccountHardening)' -Top 290
-    $toolTip.SetToolTip($chkSkipHardening, 'Leaves logon rights untouched. Use only when user-rights assignments are managed by Group Policy. Without this, the scan account is denied interactive, Remote Desktop, batch and service logon, and a reused account in a privileged group stops the setup.')
-    $chkSkipFw = New-Option -Text 'Skip firewall changes (-SkipFirewall)' -Top 316
-    $toolTip.SetToolTip($chkSkipFw, 'Leaves Windows Firewall untouched. Use when the SMB inbound rules are managed by Group Policy.')
-    $chkSkipVerify = New-Option -Text 'Skip verification probes (-SkipVerification)' -Top 342
-    $toolTip.SetToolTip($chkSkipVerify, 'Skips the SMB listener test and the credentialed write/delete test. Use when setup must not open a network connection or touch the share.')
+    $chkReset = New-Option -Text 'Reset password of an existing account' -Top 264 `
+        -Hint 'Set a new password on an existing account' `
+        -Info 'Sets a new password on an account that already exists. Leave this clear to reuse the account and its current password.'
+    $chkSkipHardening = New-Option -Text 'Skip account hardening (-SkipAccountHardening)' -Top 290 `
+        -Hint 'Leave logon rights untouched (GPO)' `
+        -Info 'Leaves logon rights untouched. Use only when user-rights assignments are managed by Group Policy. Without this, the scan account is denied interactive, Remote Desktop, batch and service logon, and a reused account in a privileged group stops the setup.'
+    $chkSkipFw = New-Option -Text 'Skip firewall changes (-SkipFirewall)' -Top 316 `
+        -Hint 'Leave Windows Firewall untouched (GPO)' `
+        -Info 'Leaves Windows Firewall untouched. Use when the SMB inbound rules are managed by Group Policy.'
+    $chkSkipVerify = New-Option -Text 'Skip verification probes (-SkipVerification)' -Top 342 `
+        -Hint 'Skip the listener and write/delete probes' `
+        -Info 'Skips the SMB listener test and the credentialed write/delete test. Use when setup must not open a network connection or touch the share.'
 
     $btnPreview = New-Action -Text 'Preview' -Left 152
-    $toolTip.SetToolTip($btnPreview, 'Runs the dry run (New-ScanShare -WhatIf) and shows the planned steps. Works without elevation and makes no changes.')
+    $toolTip.SetToolTip($btnPreview, 'Preview planned changes')
     $btnCreate = New-Action -Text 'Create' -Left 248
-    $toolTip.SetToolTip($btnCreate, 'Performs the real setup. Requires elevation; if the session is not elevated you are offered a relaunch.')
+    $toolTip.SetToolTip($btnCreate, 'Apply the setup (needs admin)')
     $btnCopy = New-Action -Text 'Copy settings' -Left 344 -Width 110
     $btnCopy.Enabled = $false
-    $toolTip.SetToolTip($btnCopy, 'Copies the host, share path, account and protocol to the clipboard for entry on the copier.')
+    $toolTip.SetToolTip($btnCopy, 'Copy copier settings')
     $btnHelp = New-Action -Text "$([char]0x2139)  Help" -Left 462 -Width 80
     $btnHelp.Font = [System.Drawing.Font]::new('Segoe UI Symbol', 9)
-    $toolTip.SetToolTip($btnHelp, 'Open the setup guide.')
+    $toolTip.SetToolTip($btnHelp, 'Open the setup guide')
     $btnClose = New-Action -Text 'Close' -Left 552
-    $toolTip.SetToolTip($btnClose, 'Close the dialog.')
+    $toolTip.SetToolTip($btnClose, 'Close the dialog')
 
     $lblStatus = [System.Windows.Forms.Label]::new()
     $lblStatus.Location = [System.Drawing.Point]::new(15, 410)
@@ -351,7 +398,8 @@ WHAT THIS DOES
   re-run: existing pieces are reused, not duplicated.
 
 HOW TO USE THIS DIALOG
-  1. Fill in the fields (the defaults work for a first setup).
+  1. Fill in the fields (the defaults work for a first setup). Hover a control
+     for a one-line hint, or click the small i button beside it for details.
   2. Click Preview to see exactly what would happen. Preview makes no changes
      and works without administrator rights.
   3. Click Create to apply it. This needs elevation; if the session is not
