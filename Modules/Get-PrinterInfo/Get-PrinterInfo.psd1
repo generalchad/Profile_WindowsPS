@@ -18,6 +18,7 @@
 
     PrivateData          = @{
         PSData = @{
+            LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
             Tags       = @('Printer', 'MFP', 'SNMP', 'Toner', 'Troubleshooting', 'Windows')
             ProjectUri = 'https://github.com/genchadt/Profile_WindowsPS'
         }

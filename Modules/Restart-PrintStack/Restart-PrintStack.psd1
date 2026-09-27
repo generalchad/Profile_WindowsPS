@@ -22,6 +22,7 @@
 
     PrivateData       = @{
         PSData = @{
+            LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
             Tags         = @('Printing', 'Printer', 'Spooler', 'Cleanup', 'Windows', 'Scanner', 'Maintenance')
             ReleaseNotes = @'
 1.0.0

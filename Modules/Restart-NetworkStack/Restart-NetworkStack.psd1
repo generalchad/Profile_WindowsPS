@@ -22,6 +22,7 @@
 
     PrivateData          = @{
         PSData = @{
+            LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
             Tags         = @(
                 'Network', 'DNS', 'DHCP', 'Winsock', 'TCPIP', 'netsh', 'ipconfig',
                 'Troubleshooting', 'Windows', 'Reset'

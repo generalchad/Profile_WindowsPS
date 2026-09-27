@@ -69,6 +69,7 @@ FileList = @(
 PrivateData = @{
 
     PSData = @{
+        LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
 
         # Tags applied to this module. These help with module discovery in online galleries.
         Tags = @('FFmpeg', 'Video', 'Compression', 'HEVC', 'NVENC', 'QSV', 'AMF', 'Parallel')

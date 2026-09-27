@@ -59,6 +59,7 @@ FileList = @(
 PrivateData = @{
 
     PSData = @{
+        LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
 
         # Tags applied to this module. These help with module discovery in online galleries.
         Tags = @('VMware', 'VMX', 'VirtualMachine', 'Workstation', 'vmxnet3', 'LegacyOS')

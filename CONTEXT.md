@@ -124,6 +124,14 @@ including Anthropic Claude, Google Gemini, and DeepSeek. AI assistance covers
 implementation, review, and documentation; the author reviews and owns every
 change.
 
+## License
+
+Released under the [Apache License, Version 2.0](LICENSE). The grant is
+perpetual, worldwide, royalty-free, and irrevocable: individuals and
+organizations may use, modify, and redistribute the code, provided the
+copyright and attribution notices are retained (see `NOTICE`). Copyright
+remains with the author.
+
 ## Housekeeping
 
 - `.gitignore` is deny-all/whitelist: `AGENTS.md`, `CONTEXT.md`, `ROADMAP.md`, and
