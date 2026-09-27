@@ -1,7 +1,22 @@
 function Update-VsCode {
     <#
     .SYNOPSIS
-        Updates extensions for VS Code and/or VS Code Insiders
+        Updates extensions for VS Code and/or VS Code Insiders.
+    .DESCRIPTION
+        Resolves the command-line executables for VS Code ('code') and VS Code Insiders
+        ('code-insiders') and triggers automated extension updates via '--update-extensions'.
+        Checks whether either editor process is active and warns that a window reload may be
+        required to complete the extension lifecycle.
+    .PARAMETER Stable
+        Updates extensions for stable VS Code only.
+    .PARAMETER Insiders
+        Updates extensions for VS Code Insiders only.
+    .EXAMPLE
+        Update-VsCode
+        Updates extensions for both Stable and Insiders editions if installed.
+    .EXAMPLE
+        Update-VsCode -Insiders
+        Updates extensions exclusively for VS Code Insiders.
     #>
     [CmdletBinding()]
     param (
