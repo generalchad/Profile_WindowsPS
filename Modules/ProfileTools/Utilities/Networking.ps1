@@ -2,9 +2,16 @@ function Test-NetSpeed {
     <#
     .SYNOPSIS
         Runs librespeed-cli to measure network throughput.
+    .PARAMETER Argument
+        Additional arguments passed through to librespeed-cli.
     #>
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromRemainingArguments)]
+        [string[]]$Argument = @()
+    )
     if (Test-CommandExists librespeed-cli) {
-        librespeed-cli $args[0]
+        librespeed-cli @Argument
     }
     else {
         Write-Error "Test-NetSpeed: librespeed-cli is not installed."
