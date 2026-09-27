@@ -52,10 +52,21 @@ Test-Case 'Manifest parses without AST errors' {
     $null -eq $e -or $e.Count -eq 0
 }
 
-Test-Case 'Module imports cleanly and exports New-ScanShare' {
+Test-Case 'Module imports cleanly and exports New-ScanShare and Show-ScanShare' {
     Import-Module $manifestPath -Force
-    $cmd = Get-Command -Module New-ScanShare
-    $cmd.Count -eq 1 -and $cmd[0].Name -eq 'New-ScanShare'
+    $names = @(Get-Command -Module New-ScanShare | ForEach-Object Name)
+    $names.Count -eq 2 -and $names -contains 'New-ScanShare' -and $names -contains 'Show-ScanShare'
+}
+
+Test-Case 'Every module script parses without AST errors' {
+    $bad = @()
+    $scripts = Get-ChildItem -Path (Join-Path $moduleRoot 'Private'), (Join-Path $moduleRoot 'Public') -Filter '*.ps1' -ErrorAction SilentlyContinue
+    foreach ($file in $scripts) {
+        $t = $e = $null
+        [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$t, [ref]$e) | Out-Null
+        if ($e -and $e.Count -gt 0) { $bad += "$($file.Name): $($e[0].Message)" }
+    }
+    $bad.Count -eq 0
 }
 
 # 2. Parameter Validation & Constraints
@@ -695,7 +706,88 @@ Test-Case 'Verification: -SkipVerification records Skipped for Listener and Acce
     $accessStep.Detail -eq '-SkipVerification'
 }
 
-# 10. Summary
+# 10. GUI Helpers (Show-ScanShare)
+Test-Case 'GUI splat: converts password, splits remote addresses, sets switches' {
+    $mod = Get-Module New-ScanShare
+    $splat = & $mod.NewBoundScriptBlock({
+        Get-ScanShareGuiSplat -Path ' D:\Scans\Xerox ' -ShareName 'XeroxScans' -UserName 'xerox' `
+            -Password 'Morris123!' -RemoteAddress '10.20.0.0/16, 10.21.0.0/16' -ResetPassword -SkipFirewall
+    })
+    $splat.Path -eq 'D:\Scans\Xerox' -and
+    $splat.ShareName -eq 'XeroxScans' -and
+    $splat.UserName -eq 'xerox' -and
+    $splat.Password -is [System.Security.SecureString] -and
+    @($splat.RemoteAddress).Count -eq 2 -and
+    $splat.RemoteAddress -contains '10.21.0.0/16' -and
+    $splat.ResetPassword -eq $true -and
+    $splat.SkipFirewall -eq $true -and
+    -not $splat.ContainsKey('SkipVerification')
+}
+
+Test-Case 'GUI splat: omits blank optional fields' {
+    $mod = Get-Module New-ScanShare
+    $splat = & $mod.NewBoundScriptBlock({ Get-ScanShareGuiSplat -Path 'C:\Scans' -ShareName 'Scans' -UserName 'scanner' })
+    -not $splat.ContainsKey('Password') -and
+    -not $splat.ContainsKey('RemoteAddress') -and
+    -not $splat.ContainsKey('ResetPassword') -and
+    $splat.Count -eq 3
+}
+
+Test-Case 'Result formatter: renders steps and copier summary on success' {
+    $mod = Get-Module New-ScanShare
+    $render = & $mod.NewBoundScriptBlock({
+        $result = [pscustomobject]@{
+            UncPath = "\\$env:COMPUTERNAME\Scans"
+            Account = "$env:COMPUTERNAME\scanner"
+            Path    = 'C:\Scans'
+            Steps   = @(
+                [pscustomobject]@{ Step = 'Account'; Status = 'Exists'; Detail = "$env:COMPUTERNAME\scanner" }
+                [pscustomobject]@{ Step = 'Share'; Status = 'Created'; Detail = "\\$env:COMPUTERNAME\Scans" }
+            )
+        }
+        Format-ScanShareResult -Result $result -ShareName 'Scans' -UserName 'scanner'
+    })
+    $render.Text -like '*Created*Share*' -and
+    $render.Text -like '*Enter on the copier*' -and
+    $render.Summary -like '*SMB, port 445*' -and
+    $render.Summary -like '*\\*Scans*'
+}
+
+Test-Case 'Result formatter: reports failed steps without copier summary' {
+    $mod = Get-Module New-ScanShare
+    $render = & $mod.NewBoundScriptBlock({
+        $result = [pscustomobject]@{
+            UncPath = "\\$env:COMPUTERNAME\Scans"
+            Account = "$env:COMPUTERNAME\scanner"
+            Path    = 'C:\Scans'
+            Steps   = @([pscustomobject]@{ Step = 'Share'; Status = 'Failed'; Detail = 'nope' })
+        }
+        Format-ScanShareResult -Result $result -ShareName 'Scans' -UserName 'scanner'
+    })
+    $render.Summary -eq '' -and $render.Text -like '*1 step(s) failed*'
+}
+
+Test-Case 'Result formatter: preview shows no copier summary' {
+    $mod = Get-Module New-ScanShare
+    $render = & $mod.NewBoundScriptBlock({
+        $result = [pscustomobject]@{
+            UncPath = "\\$env:COMPUTERNAME\Scans"
+            Account = "$env:COMPUTERNAME\scanner"
+            Path    = 'C:\Scans'
+            Steps   = @([pscustomobject]@{ Step = 'Share'; Status = 'WhatIf'; Detail = 'would create' })
+        }
+        Format-ScanShareResult -Result $result -DryRun -ShareName 'Scans' -UserName 'scanner'
+    })
+    $render.Summary -eq '' -and $render.Text -like '*Preview only*'
+}
+
+Test-Case 'Result formatter: handles null result (unelevated early return)' {
+    $mod = Get-Module New-ScanShare
+    $render = & $mod.NewBoundScriptBlock({ Format-ScanShareResult -Result $null })
+    $render.Summary -eq '' -and $render.Text -like '*No result*'
+}
+
+# 11. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1
