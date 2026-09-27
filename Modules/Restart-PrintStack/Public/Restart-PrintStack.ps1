@@ -211,7 +211,6 @@ function Restart-PrintStack {
             Write-Host ''
             Write-Host '  The print system is already at its default state - nothing to remove.' -ForegroundColor Green
             Write-Host ''
-            if ($PassThru) { return $results }
             return
         }
 
@@ -234,7 +233,6 @@ function Restart-PrintStack {
             Show-PrintStackPlan -Plan $plan
             Write-Host ("  {0} item(s) would be removed, {1} kept." -f $plan.RemoveCount, $plan.KeepCount) -ForegroundColor Yellow
             Write-Host ''
-            if ($PassThru) { return $results }
             return
         }
 
@@ -245,7 +243,6 @@ function Restart-PrintStack {
 
             if (-not $review.Confirmed) {
                 Write-Host '  Cancelled. Nothing was changed.' -ForegroundColor DarkGray
-                if ($PassThru) { return $results }
                 return
             }
 
@@ -268,14 +265,12 @@ function Restart-PrintStack {
                     "$($plan.RemoveCount) printing object(s) on $env:COMPUTERNAME",
                     'Remove')) {
                 Write-Host '  Cancelled. Nothing was changed.' -ForegroundColor DarkGray
-                if ($PassThru) { return $results }
                 return
             }
         }
 
         if ($plan.RemoveCount -eq 0) {
             Write-Host '  Nothing left to remove after the review.' -ForegroundColor Green
-            if ($PassThru) { return $results }
             return
         }
 
@@ -335,6 +330,8 @@ function Restart-PrintStack {
     }
 
     end {
+        # The only place results are emitted: early exits in process just return,
+        # so -PassThru never yields the same step twice.
         if ($PassThru) { $results }
     }
 }
