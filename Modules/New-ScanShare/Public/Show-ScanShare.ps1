@@ -20,7 +20,9 @@ function Show-ScanShare {
 
         Each field carries an inline hint, and the destination folder has a Browse
         button that opens a directory picker. Quotation marks are not required in any
-        field; they would become part of the value.
+        field; they would become part of the value. A Help button opens a short,
+        scrollable guide covering the fields, the options, and the values to enter on
+        the copier.
 
         Windows Forms is loaded only when the dialog opens, so importing the module
         stays fast and headless sessions are unaffected.
@@ -176,6 +178,8 @@ function Show-ScanShare {
     $btnCreate = New-Action -Text 'Create' -Left 248
     $btnCopy = New-Action -Text 'Copy settings' -Left 344 -Width 110
     $btnCopy.Enabled = $false
+    $btnHelp = New-Action -Text "$([char]0x2139)  Help" -Left 462 -Width 80
+    $btnHelp.Font = [System.Drawing.Font]::new('Segoe UI Symbol', 9)
     $btnClose = New-Action -Text 'Close' -Left 552
 
     $lblStatus = [System.Windows.Forms.Label]::new()
@@ -307,6 +311,142 @@ function Show-ScanShare {
     })
 
     $btnClose.Add_Click({ $form.Close() })
+
+    $helpGuide = @'
+SCAN-TO-FOLDER SETUP - QUICK GUIDE
+
+WHAT THIS DOES
+  Creates everything an office copier needs to scan to a folder on this PC:
+  a local account for the copier, the destination folder, locked-down NTFS
+  permissions, an SMB share, and the firewall rules that allow the scan.
+  Every step is safe to re-run: existing pieces are reused, not duplicated.
+
+HOW TO USE THIS DIALOG
+  1. Fill in the fields (the defaults work for a first setup).
+  2. Click Preview to see exactly what would happen. Preview makes no changes
+     and works without administrator rights.
+  3. Click Create to apply it. This needs elevation; if the session is not
+     elevated the dialog offers to relaunch as administrator.
+  4. On success, click Copy settings, then enter those values on the copier.
+
+FIELDS
+  Destination folder
+      Full path to receive scans, e.g. C:\Scans. Created if it does not exist.
+      It must not be a drive root (C:\). Use Browse to pick a folder.
+
+  Share name
+      Name the copier connects to (default "Scans"). Up to 80 characters;
+      avoid \ / : * ? " < > | [ ] ; = + ,
+
+  User name
+      Local account the copier signs in as (default "scanner"). Up to 20
+      characters; avoid \ / " [ ] : | < > + = ; , ? * @
+
+  Password
+      Password for that account. Required for a new or reset account: Windows
+      blocks network (SMB) logins for accounts with blank passwords.
+
+  Remote address (optional)
+      Source IP range allowed to reach this PC on SMB port 445. Leave blank
+      for LocalSubnet. Use a subnet such as 10.20.0.0/16 if the copier is on
+      another VLAN, or Any to allow every network.
+
+  Quotation marks are not required in any field - they become part of the value.
+
+OPTIONS
+  Reset password of an existing account
+      Sets a new password on an account that already exists.
+  Skip firewall changes
+      Leaves Windows Firewall untouched (use when rules are managed by
+      Group Policy).
+  Skip verification probes
+      Skips the SMB listener test and the credentialed write/delete test.
+
+ON THE COPIER
+  Host / server : this PC name, or its IP address
+  Share / path  : the Share name above
+  Full path     : \\<PC name>\<share>  (Copy settings puts these on the clipboard)
+  User name     : the account name; some models need <PC name>\<account>
+  Protocol      : SMB, port 445
+
+IF SOMETHING FAILS
+  - "Access" step fails with error 1219: Windows already has conflicting
+    credentials cached for this server. Disconnect existing sessions
+    (net use * /delete) or reboot, then retry.
+  - "Listener" step fails: the SMB server may be stopped. Check the "Server"
+    service (LanmanServer) and that port 445 is listening.
+  - Scans are refused on the network: an active network profile is "Public".
+    In an elevated PowerShell run:
+        Set-NetConnectionProfile -NetworkCategory Private
+  - Account or password login errors on the copier: confirm the account is
+    enabled and the password matches; re-run with "Reset password" checked.
+
+Verification uses Test-FileShare when it is available; without it the
+Listener step is skipped automatically.
+'@
+
+    $btnHelp.Add_Click({
+        $helpForm = [System.Windows.Forms.Form]::new()
+        $helpForm.Text = 'Scan Share help'
+        $helpForm.ClientSize = [System.Drawing.Size]::new(620, 540)
+        $helpForm.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterParent
+        $helpForm.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+        $helpForm.MaximizeBox = $false
+        $helpForm.MinimizeBox = $false
+        $helpForm.Font = [System.Drawing.Font]::new('Segoe UI', 9)
+
+        $helpText = [System.Windows.Forms.RichTextBox]::new()
+        $helpText.Location = [System.Drawing.Point]::new(15, 15)
+        $helpText.Size = [System.Drawing.Size]::new(590, 470)
+        $helpText.ReadOnly = $true
+        $helpText.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::Vertical
+        $helpText.WordWrap = $true
+        $helpText.DetectUrls = $false
+        $helpText.BackColor = [System.Drawing.Color]::White
+        $helpText.Font = [System.Drawing.Font]::new('Consolas', 9)
+
+        # A here-string carries LF-only line endings; the native edit control only
+        # breaks on CRLF, so normalize before assigning or the guide renders as one
+        # paragraph.
+        $newLine = [Environment]::NewLine
+        $helpLines = $helpGuide -split "`r?`n"
+        $helpText.Text = ($helpLines -join $newLine)
+
+        $headingFont = [System.Drawing.Font]::new('Consolas', 9, [System.Drawing.FontStyle]::Bold)
+        $headingColor = [System.Drawing.Color]::FromArgb(31, 78, 120)
+        $offset = 0
+        foreach ($line in $helpLines) {
+            if ($line -match '^[A-Z][A-Z0-9 /-]{2,}$') {
+                $helpText.Select($offset, $line.Length)
+                $helpText.SelectionFont = $headingFont
+                $helpText.SelectionColor = $headingColor
+            }
+            elseif ($line -match '^  [A-Z][A-Za-z ()]+$') {
+                $helpText.Select($offset, $line.Length)
+                $helpText.SelectionFont = $headingFont
+            }
+            $offset += $line.Length + $newLine.Length
+        }
+        $helpText.Select(0, 0)
+
+        $btnHelpClose = [System.Windows.Forms.Button]::new()
+        $btnHelpClose.Text = 'Close'
+        $btnHelpClose.Location = [System.Drawing.Point]::new(515, 497)
+        $btnHelpClose.Size = [System.Drawing.Size]::new(90, 28)
+
+        $helpForm.Controls.Add($helpText)
+        $helpForm.Controls.Add($btnHelpClose)
+        $helpForm.AcceptButton = $btnHelpClose
+        $helpForm.CancelButton = $btnHelpClose
+        $btnHelpClose.Add_Click({ $helpForm.Close() })
+
+        try {
+            $null = $helpForm.ShowDialog($form)
+        }
+        finally {
+            $helpForm.Dispose()
+        }
+    })
 
     $form.AcceptButton = $btnCreate
     $form.CancelButton = $btnClose
