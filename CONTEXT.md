@@ -10,7 +10,7 @@ unless it must.
 - Entry point: `Microsoft.PowerShell_profile.ps1` ("the loader")
 - OS: Windows 11
 
-Agent rules and conventions live in `AGENTS.md`.
+Agent rules and conventions live in `AGENTS.md`; planned modules in `ROADMAP.md`.
 
 ## Layout
 
@@ -43,6 +43,8 @@ time one of them is used.
 |--------|---------|
 | `Compress-Video` | Batch FFmpeg compression with GPU acceleration, resume/skip detection, and throttled parallelism. |
 | `Format-UsbDrive` | Formats removable USB drives (<70 GB) to FAT32/exFAT/NTFS, with MFD firmware-upgrade profiles. |
+| `Get-PrinterInfo` | SNMP query of a printer/MFP: model, serial, page count, status, supply levels. No external tools. |
+| `New-ScanShare` | One-step SMB scan-to-folder setup (account, folder, ACLs, share, firewall), verified with Test-FileShare. |
 | `Optimize-PSX` | Extracts disc-image archives and compresses PS1/PS2, Saturn, and Dreamcast images to CHD. |
 | `Optimize-VMX` | Tunes VMware `.vmx` files for network stability and legacy-OS compatibility. |
 | `ProfileTools` | Personal toolbox: functions, utilities, and static aliases, including `Measure-ProfileLoad`. |
@@ -118,5 +120,5 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
 
 ## Housekeeping
 
-- `.gitignore` is deny-all/whitelist: `AGENTS.md`, `CONTEXT.md`, and each tracked
-  module need an explicit `!` entry.
+- `.gitignore` is deny-all/whitelist: `AGENTS.md`, `CONTEXT.md`, `ROADMAP.md`, and
+  each tracked module need an explicit `!` entry (use `/**` so subfolders are included).
