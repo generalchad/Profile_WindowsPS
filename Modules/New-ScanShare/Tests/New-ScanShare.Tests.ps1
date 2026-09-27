@@ -265,7 +265,111 @@ Test-Case 'Firewall plan: Updates existing dedicated rule when profile is missin
     @($plan.DedicatedProfiles) -contains 'Private'
 }
 
-# 7. Summary
+# 7. Verification Steps (Listener and Access)
+Test-Case 'Verification: Listener checks local port and Access reports Skipped without password' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Test-Path { $true }
+        function Get-Acl {
+            [pscustomobject]@{
+                Access = @([pscustomobject]@{
+                    IdentityReference = [pscustomobject]@{ Value = "$env:COMPUTERNAME\scanner" }
+                    AccessControlType = 'Allow'
+                    FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify
+                })
+            }
+        }
+        function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = "$env:COMPUTERNAME\scanner"; AccessControlType = 'Allow'; AccessRight = 'Change' } }
+        function Get-NetFirewallRule { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
+        function Get-NetConnectionProfile { @() }
+        function Test-FileShare { [pscustomobject]@{ Status = 'OPEN'; Target = $env:COMPUTERNAME; Port = 445 } }
+
+        New-ScanShare -Path 'C:\Scans' -SkipFirewall
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $listenerStep = $res.Steps | Where-Object Step -eq 'Listener'
+    $accessStep = $res.Steps | Where-Object Step -eq 'Access'
+
+    $listenerStep.Status -eq 'Passed' -and
+    $accessStep.Status -eq 'Skipped' -and
+    $accessStep.Detail -like '*password not available*'
+}
+
+Test-Case 'Verification: Access writes probe file when password supplied' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        $secPass = ConvertTo-SecureString 'TestPass123!' -AsPlainText -Force
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Test-Path { $true }
+        function Get-Acl {
+            [pscustomobject]@{
+                Access = @([pscustomobject]@{
+                    IdentityReference = [pscustomobject]@{ Value = "$env:COMPUTERNAME\scanner" }
+                    AccessControlType = 'Allow'
+                    FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify
+                })
+            }
+        }
+        function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = "$env:COMPUTERNAME\scanner"; AccessControlType = 'Allow'; AccessRight = 'Change' } }
+        function Get-NetFirewallRule { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
+        function Get-NetConnectionProfile { @() }
+        function Test-FileShare { [pscustomobject]@{ Status = 'OPEN'; Target = $env:COMPUTERNAME; Port = 445 } }
+        function New-PSDrive { [pscustomobject]@{ Name = 'mockDrive' } }
+        function New-Item { [pscustomobject]@{ Name = 'mockFile' } }
+        function Remove-Item { $true }
+        function Remove-PSDrive { $true }
+
+        New-ScanShare -Path 'C:\Scans' -Password $secPass -SkipFirewall
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $accessStep = $res.Steps | Where-Object Step -eq 'Access'
+    $accessStep.Status -eq 'Passed' -and
+    $accessStep.Detail -like '*authenticated and wrote*'
+}
+
+Test-Case 'Verification: Access formats error 1219 gracefully' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        $secPass = ConvertTo-SecureString 'TestPass123!' -AsPlainText -Force
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Test-Path { $true }
+        function Get-Acl {
+            [pscustomobject]@{
+                Access = @([pscustomobject]@{
+                    IdentityReference = [pscustomobject]@{ Value = "$env:COMPUTERNAME\scanner" }
+                    AccessControlType = 'Allow'
+                    FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify
+                })
+            }
+        }
+        function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = "$env:COMPUTERNAME\scanner"; AccessControlType = 'Allow'; AccessRight = 'Change' } }
+        function Get-NetFirewallRule { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
+        function Get-NetConnectionProfile { @() }
+        function Test-FileShare { [pscustomobject]@{ Status = 'OPEN'; Target = $env:COMPUTERNAME; Port = 445 } }
+        function New-PSDrive { throw 'System error 1219 has occurred.' }
+
+        New-ScanShare -Path 'C:\Scans' -Password $secPass -SkipFirewall
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $accessStep = $res.Steps | Where-Object Step -eq 'Access'
+    $accessStep.Status -eq 'Failed' -and
+    $accessStep.Detail -like '*conflicting network credentials*'
+}
+
+# 8. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {
     exit 1
