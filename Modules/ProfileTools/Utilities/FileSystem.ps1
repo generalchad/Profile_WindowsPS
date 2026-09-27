@@ -27,23 +27,36 @@ function Find-Text {
     .PARAMETER Path
         Files to search. Defaults to pipeline input when omitted.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'Path')]
     Param(
-        [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
+        [Parameter(Mandatory, Position = 0)]
         [ValidateNotNullOrEmpty()]
         [string]$Regex,
 
-        [Parameter(ValueFromPipeline)]
-        [string[]]$Path = @()
+        [Parameter(ParameterSetName = 'Path', Position = 1, ValueFromPipelineByPropertyName)]
+        [string[]]$Path = @(),
+
+        [Parameter(ParameterSetName = 'Input', Mandatory, ValueFromPipeline)]
+        [string]$InputObject
     )
 
-    Write-Debug "Find-Text: Searching for text matching '$Regex' in $Path"
-
-    if ($Path.Count -eq 0) {
-        $input | Select-String $Regex
+    begin {
+        $lines = [System.Collections.Generic.List[string]]::new()
     }
-    else {
-        Get-ChildItem $Path | Select-String $Regex
+
+    process {
+        if ($PSCmdlet.ParameterSetName -eq 'Input') {
+            $lines.Add($InputObject)
+        }
+        elseif ($Path.Count -gt 0) {
+            Select-String -Path $Path -Pattern $Regex
+        }
+    }
+
+    end {
+        if ($lines.Count -gt 0) {
+            $lines | Select-String -Pattern $Regex
+        }
     }
 }
 
