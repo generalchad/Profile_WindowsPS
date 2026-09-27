@@ -73,7 +73,11 @@ function Optimize-VMX {
             $k = Read-Host "    > Kill processes? [Y/N]"
         }
 
-        if ($k -eq 'Y') {
+        if ($k -ne 'Y') { return }
+
+        # Under -WhatIf this is skipped but the scan continues, so the preview still
+        # shows every change that would be made.
+        if ($PSCmdlet.ShouldProcess('vmware-vmx', 'Stop-Process')) {
             Stop-Process -Name vmware-vmx -Force
 
             # Give VMware a chance to fully release file locks before we proceed. Poll
@@ -89,10 +93,10 @@ function Optimize-VMX {
             if (Get-Process vmware-vmx -ErrorAction SilentlyContinue) {
                 Write-Log "WARN" "vmware-vmx still running after ${maxWaitMs}ms wait" "Proceeding anyway"
             }
-        } else { return }
+        }
     }
 
-    $vmxFiles = Get-ChildItem -Path $Path -Filter "*.vmx" -Recurse:$Recurse
+    $vmxFiles = @(Get-ChildItem -Path $Path -Filter "*.vmx" -Recurse:$Recurse)
     $stats = @{ Scanned=0; Optimized=0; Failed=0; Skipped=0 }
 
     if ($vmxFiles.Count -eq 0) {
