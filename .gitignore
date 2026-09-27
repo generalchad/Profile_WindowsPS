@@ -24,6 +24,8 @@
 # 5. Specific Module Whitelist
 !Modules/Format-UsbDrive/
 !Modules/Format-UsbDrive/**
+!Modules/Get-PrinterInfo/
+!Modules/Get-PrinterInfo/**
 !Modules/Compress-Video/
 !Modules/Compress-Video/**
 !Modules/Optimize-PSX/
