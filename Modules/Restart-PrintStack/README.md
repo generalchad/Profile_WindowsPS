@@ -178,7 +178,7 @@ everything that was there. Recreate with `Add-PrinterPort` and `Add-Printer`.
 ## Tests
 
 ```powershell
-# 49 read-only checks (selection parser, pattern matching, planning invariants).
+# Read-only checks (selection parser, pattern matching, planning invariants).
 pwsh -NoProfile -File .\Tests\Plan.Probe.ps1
 
 # Synthetic copiers (TCP/IP, LPD, Local port) to exercise classification and
