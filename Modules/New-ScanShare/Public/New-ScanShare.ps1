@@ -11,7 +11,8 @@ function New-ScanShare {
           2. The destination folder.
           3. Locks the folder's NTFS permissions to SYSTEM, Administrators, and the
              scan account (Modify), removing inherited broad entries.
-          4. An SMB share granting the account Change access.
+          4. An SMB share open to Everyone with Full Control (access is limited by
+             the folder's NTFS permissions).
           5. The inbound "File and Printer Sharing (SMB-In)" firewall rules.
           6. Verification: checks local SMB listener and validates credentialed
              share access with a write/delete probe when password is available.
@@ -265,19 +266,19 @@ function New-ScanShare {
             }
             else {
                 $access = Get-SmbShareAccess -Name $ShareName |
-                    Where-Object { $_.AccountName -in $account, $UserName -and $_.AccessControlType -eq 'Allow' -and $_.AccessRight -in 'Change', 'Full' }
+                    Where-Object { $_.AccountName -eq 'Everyone' -and $_.AccessControlType -eq 'Allow' -and $_.AccessRight -in 'Change', 'Full' }
                 if ($access) {
-                    & $addStep 'Share' 'Exists' "\\$env:COMPUTERNAME\$ShareName"
+                    & $addStep 'Share' 'Exists' "\\$env:COMPUTERNAME\$ShareName (Everyone: Full Control)"
                 }
-                elseif ($PSCmdlet.ShouldProcess($ShareName, "Grant Change to $account")) {
-                    $null = Grant-SmbShareAccess -Name $ShareName -AccountName $account -AccessRight Change -Force -ErrorAction Stop
-                    & $addStep 'Share' 'Updated' "Change granted to $account"
+                elseif ($PSCmdlet.ShouldProcess($ShareName, 'Grant Full Control to Everyone')) {
+                    $null = Grant-SmbShareAccess -Name $ShareName -AccountName 'Everyone' -AccessRight Full -Force -ErrorAction Stop
+                    & $addStep 'Share' 'Updated' 'Full Control granted to Everyone'
                 }
-                else { & $addStep 'Share' 'WhatIf' "would grant Change to $account" }
+                else { & $addStep 'Share' 'WhatIf' 'would grant Full Control to Everyone' }
             }
         }
         elseif ($PSCmdlet.ShouldProcess("\\$env:COMPUTERNAME\$ShareName", 'Create SMB share')) {
-            $null = New-SmbShare -Name $ShareName -Path $Path -ChangeAccess $account `
+            $null = New-SmbShare -Name $ShareName -Path $Path -FullAccess Everyone `
                 -Description 'MFP scan-to-folder destination (New-ScanShare)' -ErrorAction Stop
             & $addStep 'Share' 'Created' "\\$env:COMPUTERNAME\$ShareName"
         }

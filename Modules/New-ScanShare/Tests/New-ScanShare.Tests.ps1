@@ -348,6 +348,43 @@ Test-Case 'NTFS plan: needs Modify when account is missing but folder is otherwi
     @($plan.BroadIdentities).Count -eq 0
 }
 
+Test-Case 'Share: grants Everyone Full Control on an existing share' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Test-Path { $true }
+        function Get-Acl {
+            [pscustomobject]@{
+                Access = @(
+                    [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = "$env:COMPUTERNAME\scanner" }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::Modify },
+                    [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'NT AUTHORITY\SYSTEM' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl },
+                    [pscustomobject]@{ IdentityReference = [pscustomobject]@{ Value = 'BUILTIN\Administrators' }; AccessControlType = 'Allow'; FileSystemRights = [System.Security.AccessControl.FileSystemRights]::FullControl }
+                )
+            }
+        }
+        function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = 'CONTOSO\SomeGroup'; AccessControlType = 'Allow'; AccessRight = 'Change' } }
+        function Grant-SmbShareAccess {
+            param($Name, $AccountName, $AccessRight, $Force)
+            if ($AccountName -ne 'Everyone' -or $AccessRight -ne 'Full') {
+                throw "unexpected grant: $AccountName $AccessRight"
+            }
+            [pscustomobject]@{ }
+        }
+        function Get-NetFirewallRule { @() }
+        function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
+        function Get-NetConnectionProfile { @() }
+
+        New-ScanShare -Path 'C:\Scans' -SkipFirewall -Confirm:$false
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $shareStep = $res.Steps | Where-Object Step -eq 'Share'
+    $shareStep.Status -eq 'Updated' -and
+    $shareStep.Detail -eq 'Full Control granted to Everyone'
+}
+
 # 8. Verification Steps (Listener and Access)
 Test-Case 'Verification: Listener checks local port and Access reports Skipped without password' {
     $mod = Get-Module New-ScanShare
@@ -365,7 +402,7 @@ Test-Case 'Verification: Listener checks local port and Access reports Skipped w
             }
         }
         function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
-        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = "$env:COMPUTERNAME\scanner"; AccessControlType = 'Allow'; AccessRight = 'Change' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = 'Everyone'; AccessControlType = 'Allow'; AccessRight = 'Full' } }
         function Get-NetFirewallRule { @() }
         function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
         function Get-NetConnectionProfile { @() }
@@ -400,7 +437,7 @@ Test-Case 'Verification: Access writes probe file when password supplied' {
             }
         }
         function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
-        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = "$env:COMPUTERNAME\scanner"; AccessControlType = 'Allow'; AccessRight = 'Change' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = 'Everyone'; AccessControlType = 'Allow'; AccessRight = 'Full' } }
         function Get-NetFirewallRule { @() }
         function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
         function Get-NetConnectionProfile { @() }
@@ -436,7 +473,7 @@ Test-Case 'Verification: Access formats error 1219 gracefully' {
             }
         }
         function Get-SmbShare { [pscustomobject]@{ Name = 'Scans'; Path = 'C:\Scans' } }
-        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = "$env:COMPUTERNAME\scanner"; AccessControlType = 'Allow'; AccessRight = 'Change' } }
+        function Get-SmbShareAccess { [pscustomobject]@{ AccountName = 'Everyone'; AccessControlType = 'Allow'; AccessRight = 'Full' } }
         function Get-NetFirewallRule { @() }
         function Get-SmbFirewallPlan { [pscustomobject]@{ Status = 'Exists'; RulesToEnable = @(); DedicatedAction = 'None' } }
         function Get-NetConnectionProfile { @() }
