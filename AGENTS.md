@@ -38,7 +38,9 @@ Personal PowerShell 7 profile. For architecture, load order, the load-time budge
 
 - **Target: PowerShell 7 only.** Modern syntax (`??`, `?.`, ternary) is fine.
 - **Errors:** use `$PSCmdlet.ThrowTerminatingError()` with an `ErrorRecord` instead of a raw `throw`. For missing elevation, warn and tell the user how to relaunch rather than throwing.
-- **Commits:** conventional commits scoped to the module, e.g. `feat(Test-UdpPort): …`, `fix(Optimize-PSX): …`. One logical change per commit.
+- **Commits:** conventional commits scoped to the module or component (e.g. `feat(Test-UdpPort): …`, `fix(Settings): …`, `perf(profile): …`). Commits must be common-sense and granular:
+  - *Atomic and focused:* one logical feature, fix, or optimization per commit. Never bundle unrelated modules, config changes, or refactors into a single catch-all commit.
+  - *Common-sense boundaries:* keep a module's implementation, manifest, and its corresponding `.gitignore` whitelist entry together in the same commit so each commit represents a functional, valid state without excessive micro-fragmentation.
 - **Caches:** `omp.cache.ps1`, `zoxide.cache.ps1`, and `pwsh-env.cache.ps1` live in `$env:TEMP`. Delete them to force a rebuild after changing the theme, the tools, or `$env:PATH`.
 
 ## 6. Verification
