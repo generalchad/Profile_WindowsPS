@@ -71,9 +71,12 @@ function New-ScanShare {
         Requires elevation. The account is local to this PC; on the copier use
         "<PC name>\<UserName>" (or just the user name on most models) as the login.
 
-        Runs on PowerShell 7 and Windows PowerShell 5.1. Under 5.1 use a 64-bit
-        console: the LocalAccounts module is not available in 32-bit (x86) hosts.
-        Windows client editions default Windows PowerShell to the Restricted
+        Supported platforms: Windows 10, Windows 11, and Windows Server 2016+
+        (64-bit only). Older Windows (7/8/8.1, Server 2008 R2/2012/2012 R2) lack
+        the LocalAccounts module this script depends on. Runs on PowerShell 7 and
+        Windows PowerShell 5.1. Under 5.1 use a 64-bit console: LocalAccounts is
+        not available in 32-bit (x86) hosts. Windows client editions default
+        Windows PowerShell to the Restricted
         execution policy, so on a fresh PC relax it for the session only first:
             Set-ExecutionPolicy -Scope Process Bypass
         Files copied from a download or network share may also need Unblock-File.
