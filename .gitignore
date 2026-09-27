@@ -25,6 +25,8 @@
 # 5. Specific Module Whitelist
 !Modules/Format-UsbDrive/
 !Modules/Format-UsbDrive/**
+!Modules/Get-NetworkDiagnostics/
+!Modules/Get-NetworkDiagnostics/**
 !Modules/Get-PrinterInfo/
 !Modules/Get-PrinterInfo/**
 !Modules/New-ScanShare/
