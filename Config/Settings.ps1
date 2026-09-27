@@ -47,7 +47,9 @@ if ($supportedParams) {
 # Must return $true to keep a line and $false to drop it; returning nothing made
 # PSReadLine fall back to its default (keep) for BOTH branches, so secrets were
 # never actually being filtered.
-$script:SensitiveHistoryPattern = 'password|secret|key|apikey|token|connectionstring'
+# Tightened regex prevents dropping innocent commands like 'winget search token'
+# or 'ssh-keygen' while catching passwords, connection strings, and key/token assignments.
+$script:SensitiveHistoryPattern = '(?i)(password|secret|apikey|connectionstring|--?[a-z0-9_-]*(?:token|key)\b|(?:key|token)\s*[:=])'
 try {
     Set-PSReadLineOption -AddToHistoryHandler {
         param($Line)

@@ -84,24 +84,60 @@ if ($ProfileTrace) { Mark 'Aliases' }
 # Terminal-Icons is intentionally not imported: it adds measurable startup cost
 # for icons that aren't essential. Opt in with `Import-Module Terminal-Icons`.
 
-# Oh-My-Posh (Optimized Caching - Only regenerate if cache missing)
+# Oh-My-Posh (Optimized Caching - Regenerate if cache missing or stale)
 $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
 $OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
 $OmpExe   = Resolve-CachedCommand 'oh-my-posh'
 
 if ($OmpExe -and (Test-Path $OmpTheme)) {
-    # Only regenerate if cache doesn't exist (eliminates 3 Get-Item calls on normal loads)
-    if (-not (Test-Path $OmpCache)) {
-        oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8 -Force
+    $themeTicks  = [System.IO.File]::GetLastWriteTimeUtc($OmpTheme).Ticks
+    $exeTicks    = [System.IO.File]::GetLastWriteTimeUtc($OmpExe).Ticks
+    $expectedKey = "# KEY:$themeTicks-$exeTicks"
+
+    $regenerate = -not (Test-Path $OmpCache)
+    if (-not $regenerate) {
+        $firstLine = $null
+        try {
+            $reader = [System.IO.File]::OpenText($OmpCache)
+            $firstLine = $reader.ReadLine()
+            $reader.Dispose()
+        } catch { $regenerate = $true }
+
+        if ($firstLine -ne $expectedKey) {
+            $regenerate = $true
+        }
     }
 
-    if (Test-Path $OmpCache) {
-        try {
-            . $OmpCache
-        } catch {
-            # Self-healing: regenerate on error
-            oh-my-posh init pwsh --config "$OmpTheme" | Out-File -FilePath $OmpCache -Encoding utf8 -Force
-            . $OmpCache
+    if ($regenerate) {
+        $raw = & $OmpExe init pwsh --config "$OmpTheme"
+        # Avoid static session ID locking all shells to the same ID; generate dynamically per session
+        $content = $raw -replace '\$env:POSH_SESSION_ID\s*=\s*"[^"]+";', '$env:POSH_SESSION_ID = [System.Guid]::NewGuid().ToString();'
+        [System.IO.File]::WriteAllText($OmpCache, "$expectedKey`r`n$content", [System.Text.Encoding]::UTF8)
+    }
+
+    if ($env:OMP_ASYNC -eq '1') {
+        # Defer prompt init until after first prompt render when gated by OMP_ASYNC=1
+        $global:_ompOriginalPromptFunction = $Function:prompt
+        $Function:prompt = {
+            if (-not $global:_ompInitialized) {
+                $global:_ompAsyncInit = $true
+                try { . $OmpCache } catch { Write-Warning "oh-my-posh async init: $_" }
+            }
+            if ($global:_ompPromptFunction) {
+                & $global:_ompPromptFunction
+            }
+        }
+    } else {
+        if (Test-Path $OmpCache) {
+            try {
+                . $OmpCache
+            } catch {
+                # Self-healing: regenerate on error
+                $raw = & $OmpExe init pwsh --config "$OmpTheme"
+                $content = $raw -replace '\$env:POSH_SESSION_ID\s*=\s*"[^"]+";', '$env:POSH_SESSION_ID = [System.Guid]::NewGuid().ToString();'
+                [System.IO.File]::WriteAllText($OmpCache, "$expectedKey`r`n$content", [System.Text.Encoding]::UTF8)
+                . $OmpCache
+            }
         }
     }
 }
