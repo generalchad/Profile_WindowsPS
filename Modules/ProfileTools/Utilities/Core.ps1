@@ -135,11 +135,14 @@ function Stop-ProcessByName {
     }
 }
 
-function Get-Uptime {
+function Show-Uptime {
     <#
     .SYNOPSIS
         Reports the last boot time and how long the system has been up.
     .DESCRIPTION
+        Not named Get-Uptime so it doesn't shadow the built-in PowerShell 7
+        cmdlet, which returns a TimeSpan for scripting.
+
         Queries Win32_OperatingSystem via CIM, which is comparatively slow; avoid
         calling this from a prompt hook or other hot path.
     #>

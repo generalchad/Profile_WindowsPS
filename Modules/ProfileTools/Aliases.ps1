@@ -24,7 +24,7 @@ Set-Alias -Name downloads -Value dl
 ("testsmtp", "testmail", "checksmtp") | ForEach-Object { Set-Alias -Name $_ -Value Test-SmtpRelay }
 ("myip", "getmyip", "showmyip")       | ForEach-Object { Set-Alias -Name $_ -Value Show-MyIP }
 ("speed", "speedtest")                | ForEach-Object { Set-Alias -Name $_ -Value Test-NetSpeed }
-("up", "uptime")                      | ForEach-Object { Set-Alias -Name $_ -Value Get-Uptime }
+("up", "uptime")                      | ForEach-Object { Set-Alias -Name $_ -Value Show-Uptime }
 ("instime", "installtime")            | ForEach-Object { Set-Alias -Name $_ -Value Get-WindowsInstallInfo }
 Set-Alias -Name hb -Value New-Hastebin
 
@@ -74,8 +74,11 @@ function ga { git add . }
 <#
 .SYNOPSIS
     Pushes the current branch.
+.DESCRIPTION
+    Not named `gp`: that is a built-in read-only alias for Get-ItemProperty and
+    always wins over a function of the same name.
 #>
-function gp { git push }
+function gpush { git push }
 
 <#
 .SYNOPSIS
@@ -164,10 +167,15 @@ function quit { exit }
 <#
 .SYNOPSIS
     Runs Python, warning if it is not installed.
+.DESCRIPTION
+    This function shadows the py.exe launcher, so it defers to the launcher when
+    one is installed and only falls back to python.exe otherwise.
 #>
 function py {
-    if (Get-Command python -ErrorAction SilentlyContinue) {
-        python @args
+    $python = Get-Command py, python -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($python) {
+        & $python @args
     } else {
         Write-Warning "Python not found."
     }
