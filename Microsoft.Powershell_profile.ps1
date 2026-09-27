@@ -3,6 +3,8 @@
 #
 # Authored by Timothy W. Brown with the assistance of large language models,
 # including Anthropic Claude, Google Gemini, and DeepSeek.
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
 # -----------------------------------------------------------------------------
 $ProfileRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($PROFILE) { Split-Path -Parent $PROFILE } else { $PSScriptRoot }
 if (-not $ProfileRoot) { $ProfileRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }

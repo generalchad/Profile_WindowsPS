@@ -11,4 +11,9 @@
     CmdletsToExport      = @()
     VariablesToExport    = @()
     AliasesToExport      = @('Test-NetworkDiagnostics')
+    PrivateData = @{
+        PSData = @{
+            LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
+        }
+    }
 }

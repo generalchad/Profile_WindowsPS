@@ -23,6 +23,7 @@
 
     PrivateData          = @{
         PSData = @{
+            LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
             Tags         = @('USB', 'Disk', 'Format', 'FAT32', 'exFAT', 'NTFS', 'Removable', 'Windows', 'Xerox', 'Kyocera', 'MFD', 'Firmware')
             ProjectUri   = 'https://github.com/genchadt/Profile_WindowsPS'
             ReleaseNotes = @'

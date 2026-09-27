@@ -119,7 +119,7 @@ PrivateData = @{
         Tags = @('Plex', 'Jellyfin', 'Media', 'Rename', 'Subtitles', 'Kodi')
 
         # A URL to the license for this module.
-        # LicenseUri = ''
+        LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
 
         # A URL to the main website for this project.
         # ProjectUri = ''
