@@ -151,6 +151,34 @@ Test-Case 'Primary LAN IP resolves to valid non-virtual address' {
     $ip -notmatch '^169\.254\.'
 }
 
+Test-Case 'Get-PrimaryIPv4Address returns non-APIPA address on last-resort fallback' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-NetRoute { @() }
+        function Get-NetIPAddress {
+            [pscustomobject]@{
+                PrefixOrigin   = 'Dhcp'
+                IPAddress      = '192.168.100.55'
+                InterfaceAlias = 'vEthernet (Default Switch)'
+            }
+        }
+        Get-PrimaryIPv4Address
+    }
+    $ip = & $mod.NewBoundScriptBlock($testBlock)
+    $ip -eq '192.168.100.55'
+}
+
+Test-Case 'Get-PrimaryIPv4Address returns null when no matching IPv4 address exists' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Get-NetRoute { @() }
+        function Get-NetIPAddress { @() }
+        Get-PrimaryIPv4Address
+    }
+    $ip = & $mod.NewBoundScriptBlock($testBlock)
+    $null -eq $ip
+}
+
 # 6. Summary
 Write-Host "`nTest Results: $($script:Pass) Passed, $($script:Fail) Failed`n" -ForegroundColor $(if ($script:Fail -eq 0) { 'Green' } else { 'Red' })
 if ($script:Fail -gt 0) {

@@ -43,5 +43,9 @@ function Get-PrimaryIPv4Address {
         Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notlike '169.254.*' } |
         Select-Object -ExpandProperty IPAddress -First 1)
 
-    return if ($anyNonApipa.Count -gt 0) { $anyNonApipa[0] } else { $null }
+    if ($anyNonApipa.Count -gt 0) {
+        return $anyNonApipa[0]
+    }
+
+    return $null
 }
