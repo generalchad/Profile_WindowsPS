@@ -17,9 +17,9 @@ function Invoke-Elevation {
 
         Elevation uses the RunAs verb (UAC prompt) and always opens a NEW window: an
         elevated process cannot attach to a non-elevated Windows Terminal window,
-        because the lower-integrity window is blocked by UIPI. De-elevation uses
-        runas /trustlevel:0x20000 to spawn a Basic User (non-elevated) process
-        without a password prompt, also in a new window/tab.
+        because the lower-integrity window is blocked by UIPI. De-elevation launches
+        through the session's filtered (non-elevated) token, so the new window is a
+        normal non-elevated shell that can itself elevate again later.
 
         The current session is left untouched unless -CloseCurrent is given.
 
@@ -134,6 +134,7 @@ function Invoke-Elevation {
     $inTerminal = [bool] $env:WT_SESSION
     $cwd = if ($PWD.ProviderPath) { $PWD.ProviderPath } else { $null }
     $hostExe = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+    $hostPath = Join-Path $PSHOME ($hostExe + '.exe')
 
     $launchArgs = ''
     if ($PSCmdlet.ParameterSetName -eq 'Run') {
@@ -171,26 +172,36 @@ function Invoke-Elevation {
 
     try {
         if ($unelevate) {
-            # runas /trustlevel:0x20000 spawns a Basic User (non-elevated) process
-            # with no password prompt. Inner quotes in the target command must be
-            # escaped as \" so the whole command survives as a single runas argument;
-            # -WindowStyle Hidden hides runas itself, not the session it launches.
-            $target = if ($inTerminal) { "$wtExe $wtArgs" } else { "$hostExe $launchArgs" }
-            $runasArgs = '/trustlevel:0x20000 "' + ($target.Trim() -replace '"', '\"') + '"'
+            # De-elevate through a filtered (non-elevated) token: it is a genuine
+            # non-elevated token, so the child can elevate again. runas /trustlevel
+            # builds a SAFER restricted token that cannot re-elevate, so it is only
+            # kept as a fallback when no filtered token can be obtained (UAC off).
+            $target = if ($inTerminal) { '"' + $wtExe + '" ' + $wtArgs } else { $hostExe + ' ' + $launchArgs }
+            $target = $target.Trim()
+            $filePath = if ($inTerminal) { $wtExe } else { $hostPath }
 
-            $startParams = @{
-                FilePath    = 'runas.exe'
-                ArgumentList = $runasArgs
-                WindowStyle = 'Hidden'
-                PassThru    = $true
-                ErrorAction = 'Stop'
+            $launchedPid = Start-LimitedProcess -FilePath $filePath -CommandLine $target -WorkingDirectory $cwd
+
+            if ($null -eq $launchedPid) {
+                # Inner quotes in the target command must be escaped as \" so the
+                # whole command survives as a single runas argument; -WindowStyle
+                # Hidden hides runas itself, not the session it launches.
+                $runasArgs = '/trustlevel:0x20000 "' + ($target -replace '"', '\"') + '"'
+
+                $startParams = @{
+                    FilePath     = 'runas.exe'
+                    ArgumentList = $runasArgs
+                    WindowStyle  = 'Hidden'
+                    PassThru     = $true
+                    ErrorAction  = 'Stop'
+                }
+                if ($cwd) { $startParams['WorkingDirectory'] = $cwd }
+
+                $launchedPid = (Start-Process @startParams).Id
             }
-            if ($cwd) { $startParams['WorkingDirectory'] = $cwd }
-
-            $process = Start-Process @startParams
         }
         elseif ($inTerminal) {
-            $process = Start-Process -FilePath $wtExe -Verb RunAs -ArgumentList $wtArgs -PassThru -ErrorAction Stop
+            $launchedPid = (Start-Process -FilePath $wtExe -Verb RunAs -ArgumentList $wtArgs -PassThru -ErrorAction Stop).Id
         }
         else {
             $startParams = @{
@@ -202,7 +213,7 @@ function Invoke-Elevation {
             if ($cwd) { $startParams['WorkingDirectory'] = $cwd }
             if ($launchArgs) { $startParams['ArgumentList'] = $launchArgs }
 
-            $process = Start-Process @startParams
+            $launchedPid = (Start-Process @startParams).Id
         }
     }
     catch [System.ComponentModel.Win32Exception] {
@@ -221,7 +232,7 @@ function Invoke-Elevation {
     }
 
     $mode = if ($unelevate) { 'Unelevated' } else { 'Elevated' }
-    Write-Host "$mode window launched (PID $($process.Id))." -ForegroundColor Green
+    Write-Host "$mode window launched (PID $launchedPid)." -ForegroundColor Green
 
     if ($closeCurrent) {
         exit
