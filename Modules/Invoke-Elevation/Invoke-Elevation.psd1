@@ -1,6 +1,6 @@
 @{
     RootModule           = 'Invoke-Elevation.psm1'
-    ModuleVersion        = '1.1.0'
+    ModuleVersion        = '1.2.0'
     GUID                 = '3f2a9c1e-7d54-4a2b-9e0f-6c8b1d4a7e21'
     Author               = 'Timothy W. Brown'
     CompanyName          = 'Timothy W. Brown'
@@ -24,6 +24,13 @@
             Tags         = @('Elevation', 'Unelevation', 'Administrator', 'RunAs', 'UAC', 'WindowsTerminal', 'Windows')
             ProjectUri   = 'https://github.com/genchadt/Profile_WindowsPS'
             ReleaseNotes = @'
+1.2.0
+- De-elevate through a filtered (non-elevated) token instead of
+  runas /trustlevel:0x20000. The SAFER restricted token could not elevate
+  again, so an unelevated window launched from an elevated one would silently
+  relaunch unelevated on the next Invoke-Elevation call. Uses the UAC linked
+  token, falling back to the desktop shell's token, then runas /trustlevel.
+
 1.1.0
 - Add -Unelevate (aliases -u and the bare positional u) to open a non-elevated
   session via runas /trustlevel:0x20000; works only from an elevated session.

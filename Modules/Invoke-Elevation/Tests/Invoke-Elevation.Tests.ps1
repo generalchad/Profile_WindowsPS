@@ -380,63 +380,63 @@ Test-Case 'Accepts the combined u x positional shorthand' {
     (& $mod.NewBoundScriptBlock($testBlock)) -eq $true
 }
 
-Test-Case 'From elevated, bare u launches runas /trustlevel for the host' {
+Test-Case 'From elevated, bare u launches the host with a filtered token' {
     $oldSession = $env:WT_SESSION
     try {
         $env:WT_SESSION = $null
         $mod = Get-Module Invoke-Elevation
         $testBlock = {
             function Test-Elevation { $true }
-            function Start-Process {
-                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
+            function Start-LimitedProcess {
+                param($FilePath, $CommandLine, $WorkingDirectory)
                 $script:capture = [pscustomobject]@{
                     FilePath    = $FilePath
-                    Args        = $ArgumentList
-                    WindowStyle = $WindowStyle
+                    CommandLine = $CommandLine
                 }
-                [pscustomobject]@{ Id = 7 }
+                7
             }
+            function Start-Process { throw 'runas fallback must not run when a linked token exists' }
             Invoke-Elevation u
             $script:capture
         }
         $res = & $mod.NewBoundScriptBlock($testBlock)
         $expectedHost = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
 
-        $res.FilePath -eq 'runas.exe' -and
-        $res.Args -like '/trustlevel:0x20000 *' -and
-        $res.Args -like "*$expectedHost*" -and
-        $res.WindowStyle -eq 'Hidden'
+        $res.FilePath -eq (Join-Path $PSHOME ($expectedHost + '.exe')) -and
+        $res.CommandLine -like "*$expectedHost*" -and
+        $res.CommandLine -notlike '*runas*'
     }
     finally {
         $env:WT_SESSION = $oldSession
     }
 }
 
-Test-Case 'From elevated, the -Unelevate switch launches runas /trustlevel' {
+Test-Case 'From elevated, the -Unelevate switch launches a filtered token' {
     $oldSession = $env:WT_SESSION
     try {
         $env:WT_SESSION = $null
         $mod = Get-Module Invoke-Elevation
         $testBlock = {
             function Test-Elevation { $true }
-            function Start-Process {
-                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
-                $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
-                [pscustomobject]@{ Id = 8 }
+            function Start-LimitedProcess {
+                param($FilePath, $CommandLine, $WorkingDirectory)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; CommandLine = $CommandLine }
+                8
             }
+            function Start-Process { throw 'runas fallback must not run when a linked token exists' }
             Invoke-Elevation -Unelevate
             $script:capture
         }
         $res = & $mod.NewBoundScriptBlock($testBlock)
 
-        $res.FilePath -eq 'runas.exe' -and $res.Args -like '/trustlevel:0x20000*'
+        $res.FilePath -like '*.exe' -and $res.CommandLine -notlike '*runas*'
     }
     finally {
         $env:WT_SESSION = $oldSession
     }
 }
 
-Test-Case 'Unelevating inside Windows Terminal targets wt.exe with escaped quotes' {
+Test-Case 'Unelevating inside Windows Terminal targets wt.exe with the profile and directory' {
     $oldSession = $env:WT_SESSION
     $oldProfile = $env:WT_PROFILE_ID
     try {
@@ -447,21 +447,21 @@ Test-Case 'Unelevating inside Windows Terminal targets wt.exe with escaped quote
         $testBlock = {
             function Test-Elevation { $true }
             function Get-Command { [pscustomobject]@{ Source = 'C:\WindowsApps\wt.exe' } }
-            function Start-Process {
-                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
-                $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
-                [pscustomobject]@{ Id = 9 }
+            function Start-LimitedProcess {
+                param($FilePath, $CommandLine, $WorkingDirectory)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; CommandLine = $CommandLine }
+                9
             }
+            function Start-Process { throw 'runas fallback must not run when a linked token exists' }
             Invoke-Elevation u
             $script:capture
         }
         $res = & $mod.NewBoundScriptBlock($testBlock)
 
-        $res.FilePath -eq 'runas.exe' -and
-        $res.Args -like '/trustlevel:0x20000 *' -and
-        $res.Args -like '*C:\WindowsApps\wt.exe*' -and
-        $res.Args -like '*-p \"*' -and
-        $res.Args -like '*-d \"*'
+        $res.FilePath -eq 'C:\WindowsApps\wt.exe' -and
+        $res.CommandLine -like '*C:\WindowsApps\wt.exe*' -and
+        $res.CommandLine -like '*-p "*' -and
+        $res.CommandLine -like '*-d "*'
     }
     finally {
         $env:WT_SESSION = $oldSession
@@ -476,20 +476,20 @@ Test-Case 'Unelevate accepts a script block via -u' {
         $mod = Get-Module Invoke-Elevation
         $testBlock = {
             function Test-Elevation { $true }
-            function Start-Process {
-                param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
-                $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
-                [pscustomobject]@{ Id = 11 }
+            function Start-LimitedProcess {
+                param($FilePath, $CommandLine, $WorkingDirectory)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; CommandLine = $CommandLine }
+                11
             }
+            function Start-Process { throw 'runas fallback must not run when a linked token exists' }
             Invoke-Elevation -u { Write-Output 'hi' }
             $script:capture
         }
         $res = & $mod.NewBoundScriptBlock($testBlock)
-        $m = [regex]::Match($res.Args, '-EncodedCommand\s+([A-Za-z0-9+/=]+)')
+        $m = [regex]::Match($res.CommandLine, '-EncodedCommand\s+([A-Za-z0-9+/=]+)')
         $decoded = if ($m.Success) { [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value)) } else { $null }
 
-        $res.FilePath -eq 'runas.exe' -and
-        $res.Args -like '/trustlevel:0x20000*' -and
+        $res.FilePath -like '*.exe' -and
         $decoded -eq "Write-Output 'hi'"
     }
     finally {
@@ -509,12 +509,38 @@ Test-Case 'uel launches an unelevated session from an elevated one' {
         $mod = Get-Module Invoke-Elevation
         $testBlock = {
             function Test-Elevation { $true }
+            function Start-LimitedProcess {
+                param($FilePath, $CommandLine, $WorkingDirectory)
+                $script:capture = [pscustomobject]@{ FilePath = $FilePath; CommandLine = $CommandLine }
+                10
+            }
+            function Start-Process { throw 'runas fallback must not run when a linked token exists' }
+            Invoke-Unelevation
+            $script:capture
+        }
+        $res = & $mod.NewBoundScriptBlock($testBlock)
+
+        $res.FilePath -like '*.exe' -and $res.CommandLine -notlike '*runas*'
+    }
+    finally {
+        $env:WT_SESSION = $oldSession
+    }
+}
+
+Test-Case 'Falls back to runas /trustlevel when no linked token exists' {
+    $oldSession = $env:WT_SESSION
+    try {
+        $env:WT_SESSION = $null
+        $mod = Get-Module Invoke-Elevation
+        $testBlock = {
+            function Test-Elevation { $true }
+            function Start-LimitedProcess { param($FilePath, $CommandLine, $WorkingDirectory) $null }
             function Start-Process {
                 param($FilePath, $Verb, $ArgumentList, $WorkingDirectory, [switch]$PassThru, $ErrorAction, $WindowStyle)
                 $script:capture = [pscustomobject]@{ FilePath = $FilePath; Args = $ArgumentList }
-                [pscustomobject]@{ Id = 10 }
+                [pscustomobject]@{ Id = 12 }
             }
-            Invoke-Unelevation
+            Invoke-Elevation u
             $script:capture
         }
         $res = & $mod.NewBoundScriptBlock($testBlock)
