@@ -55,9 +55,10 @@ deferred and listed in rough priority order.
 
 - Add `.OUTPUTS` and `.EXAMPLE` (and side-effect notes for deletes, `.bak`
   writes, process kills) to every exported function: Optimize-VMX,
-  Compress-Video, Rename-MediaFile, Test-FileShare, Test-UdpPort,
-  Get-CustomModule, Get-NetworkDiagnostics, Find-NetworkDevice, and the
-  ProfileTools short-help functions.
+  Compress-Video (including `Get-CompressVideoConfig`/`Set-CompressVideoConfig`),
+  Rename-MediaFile, Invoke-Elevation/Invoke-Unelevation, Test-FileShare,
+  Test-UdpPort, Get-CustomModule, Get-NetworkDiagnostics, Find-NetworkDevice,
+  and the ProfileTools short-help functions.
 - Remove step/section narration comments (`# ---- N. X ----`,
   `# ==== PHASE N ====`, numbered banners) while preserving rationale comments.
 - Strip the one-off benchmark numbers embedded in
@@ -65,8 +66,6 @@ deferred and listed in rough priority order.
 
 ### Phase 5 - manifest standardization
 
-- Normalize `Author`/`CompanyName`/`Copyright` (currently `GenChadT`,
-  `GenChadt`, `Timothy Brown`, `TimothyWBrown`, `Timothy W. Brown`).
 - Use array form for `FunctionsToExport`/`AliasesToExport` everywhere
   (Optimize-PSX, Rename-MediaFile, Test-* use strings).
 - Remove wildcard exports (`Rename-MediaFile` `CmdletsToExport`/
@@ -93,7 +92,7 @@ deferred and listed in rough priority order.
   `Modules/Rename-MediaFile/Private/Show-RenamePreview.ps1.old`.
 - Remove unused helpers: `Get-ElevationHint` in Invoke-Elevation, unreachable
   `-DryRun` parameters in Restart-PrintStack, `-IncludeDisconnected` in
-  Restart-NetworkStack, and `Get-PrintStackAllowList`'s unused `$Driver`.
+  Restart-NetworkStack, and `Add-PrintStackAllowListEntry`'s unused `$Driver`.
 - Reconcile `Restart-PrintStack/README.md` with `_Config.ps1` and the plan
   reason strings.
 - Consider hashing/regenerating duplicated helper files rather than sharing
