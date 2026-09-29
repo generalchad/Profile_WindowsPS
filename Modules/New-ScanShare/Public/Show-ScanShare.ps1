@@ -337,7 +337,10 @@ function Show-ScanShare {
             if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
                 $exe = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
                 try {
-                    Start-Process -FilePath $exe -Verb RunAs -ArgumentList '-NoExit', '-Command', 'Show-ScanShare' -ErrorAction Stop
+                    # The elevated child is a new process that must re-autoload this
+                    # module; without Bypass a Restricted client (the Windows default
+                    # under Windows PowerShell 5.1) blocks that import.
+                    Start-Process -FilePath $exe -Verb RunAs -ArgumentList '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', 'Show-ScanShare' -ErrorAction Stop
                     $form.Close()
                 }
                 catch {
