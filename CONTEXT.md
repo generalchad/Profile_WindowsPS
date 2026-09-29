@@ -106,6 +106,11 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
   profile) with optional per-stage breakdown.
 - `$env:PROFILE_TRACE=1` before launching `pwsh` writes a per-stage breakdown to
   `$env:TEMP\pwsh-profile-trace.log`.
+- `Modules/New-ScanShare/Deploy/New-ScanSharePackage.ps1` builds
+  `Dist\New-ScanShare-Portable-<version>.zip`: a double-click bundle whose
+  `Install-ScanShare.cmd` installs `New-ScanShare`/`Show-ScanShare` per-user for
+  both PowerShell 7 and Windows PowerShell 5.1 and drops a Desktop shortcut.
+  `Dist/` is git-ignored; the `Deploy/` sources are tracked.
 
 ## Remaining work
 
