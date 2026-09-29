@@ -61,13 +61,30 @@ if (-not (Test-Path -LiteralPath $sourceManifest)) {
     throw "Bundled module not found at '$sourceModule'. Keep Install-ScanShare.ps1 next to the New-ScanShare folder."
 }
 
-$sourceVersion = [version](Import-PowerShellDataFile -LiteralPath $sourceManifest).ModuleVersion
+$sourceData = $null
+try {
+    $sourceData = Import-PowerShellDataFile -LiteralPath $sourceManifest
+}
+catch {
+    throw "Bundled module manifest '$sourceManifest' could not be read: $($_.Exception.Message)"
+}
+if (-not ($sourceData -is [System.Collections.IDictionary]) -or
+    -not $sourceData.ContainsKey('ModuleVersion') -or
+    -not $sourceData['ModuleVersion']) {
+    throw "Bundled module manifest '$sourceManifest' does not declare ModuleVersion."
+}
+
+$sourceVersion = [version]$sourceData['ModuleVersion']
 $sourceFullPath = (Get-Item -LiteralPath $sourceModule).FullName
 
 function Install-ScanShareModule {
     param(
         [Parameter(Mandatory)][string]$ModulesRoot
     )
+
+    if (Test-Path -LiteralPath $ModulesRoot -PathType Leaf) {
+        throw "Module path '$ModulesRoot' is a file, not a folder."
+    }
 
     $target = Join-Path $ModulesRoot 'New-ScanShare'
     $targetManifest = Join-Path $target $manifestName
@@ -163,5 +180,10 @@ if ($NoLaunch) {
 }
 
 Write-Host 'Opening the setup dialog...'
-Import-Module (Join-Path $primaryTarget $manifestName) -Force
-Show-ScanShare
+try {
+    Import-Module (Join-Path $primaryTarget $manifestName) -Force -ErrorAction Stop
+    Show-ScanShare
+}
+catch {
+    throw "The tool is installed, but the setup dialog could not be opened: $($_.Exception.Message) Open a PowerShell window and run 'Show-ScanShare'."
+}

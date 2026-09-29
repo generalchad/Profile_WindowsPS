@@ -12,7 +12,7 @@ rem would otherwise block an unsigned local script.
 
 if errorlevel 1 (
     echo.
-    echo Installation failed. Review the message above.
+    echo The installer did not finish cleanly. Review the message above.
     pause
 )
 endlocal
