@@ -220,7 +220,7 @@ function Show-ScanShare {
         -Hint 'Password for that account' `
         -Info 'Password for that account. Required for a new or reset account: Windows blocks network (SMB) logons for accounts with blank passwords.'
 
-    $null = New-Hint -Top 164 -Height 34 -Text 'Quotation marks are not required. Share name: max 80 chars. User name: max 20 chars. Avoid \ / : * ? " < > | [ ] ; = + , @'
+    $null = New-Hint -Top 164 -Height 34 -Text "Share name: max 80 chars. User name: max 20 chars. Password: max 128 chars.`nAvoid \ / : * ? `" < > | [ ] ; = + , @"
 
     $txtRemote = New-LabeledInput -Label 'Remote address' -Top 202 `
         -Hint 'Allowed source IP range' `
