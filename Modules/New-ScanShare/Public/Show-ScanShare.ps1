@@ -177,13 +177,13 @@ function Show-ScanShare {
         return $button
     }
 
-    $txtPath = New-LabeledInput -Label 'Destination folder' -Top 18 -Width 352 `
+    $txtPath = New-LabeledInput -Label '&Destination folder' -Top 18 -Width 352 `
         -Hint 'Folder that receives scans' `
         -Info 'Full path that receives scans, e.g. C:\Scans. Created if it does not exist. It must be a dedicated subfolder, not a drive root such as C:\. Use Browse to pick an existing folder.'
     $txtPath.Text = 'C:\Scans'
 
     $btnBrowse = [System.Windows.Forms.Button]::new()
-    $btnBrowse.Text = 'Browse...'
+    $btnBrowse.Text = '&Browse...'
     $btnBrowse.Location = [System.Drawing.Point]::new(510, 16)
     $btnBrowse.Size = [System.Drawing.Size]::new(90, 25)
     $form.Controls.Add($btnBrowse)
@@ -208,50 +208,50 @@ function Show-ScanShare {
 
     $null = New-Hint -Top 44 -Text 'Full path (e.g. C:\Scans). Created if missing. Browse to pick a folder.'
 
-    $txtShare = New-LabeledInput -Label 'Share name' -Top 72 `
+    $txtShare = New-LabeledInput -Label '&Share name' -Top 72 `
         -Hint 'Name the copier connects to' `
         -Info 'Name the copier connects to (default "Scans"). Up to 80 characters; avoid \ / : * ? " < > | [ ] ; = + ,'
     $txtShare.Text = 'Scans'
-    $txtUser = New-LabeledInput -Label 'User name' -Top 104 `
+    $txtUser = New-LabeledInput -Label '&User name' -Top 104 `
         -Hint 'Account the copier signs in as' `
         -Info 'Local account the copier signs in as (default "scanner"). Up to 20 characters; avoid \ / " [ ] : | < > + = ; , ? * @'
     $txtUser.Text = 'scanner'
-    $txtPassword = New-LabeledInput -Label 'Password' -Top 136 -Width 300 -Password `
+    $txtPassword = New-LabeledInput -Label '&Password' -Top 136 -Width 300 -Password `
         -Hint 'Password for that account' `
         -Info 'Password for that account. Required for a new or reset account: Windows blocks network (SMB) logons for accounts with blank passwords.'
 
     $null = New-Hint -Top 164 -Height 34 -Text "Share name: max 80 chars. User name: max 20 chars. Password: max 128 chars.`nAvoid \ / : * ? `" < > | [ ] ; = + , @"
 
-    $txtRemote = New-LabeledInput -Label 'Remote address' -Top 202 `
+    $txtRemote = New-LabeledInput -Label '&Remote address' -Top 202 `
         -Hint 'Allowed source IP range' `
         -Info 'Optional. Source IP range allowed to reach SMB port 445. Blank = LocalSubnet; use a subnet such as 10.20.0.0/16 if the copier is on another VLAN, or Any to allow every network.'
 
     $null = New-Hint -Top 226 -Height 32 -Text 'Optional. Source IP range allowed to scan. Blank = LocalSubnet; e.g. 10.20.0.0/16 or Any.'
 
-    $chkReset = New-Option -Text 'Reset password of an existing account' -Top 264 `
+    $chkReset = New-Option -Text 'R&eset password of an existing account' -Top 264 `
         -Hint 'Set a new password on an existing account' `
         -Info 'Sets a new password on an account that already exists. Leave this clear to reuse the account and its current password.'
-    $chkSkipHardening = New-Option -Text 'Skip account hardening (-SkipAccountHardening)' -Top 290 `
+    $chkSkipHardening = New-Option -Text 'S&kip account hardening (-SkipAccountHardening)' -Top 290 `
         -Hint 'Leave logon rights untouched (GPO)' `
         -Info 'Leaves logon rights untouched. Use only when user-rights assignments are managed by Group Policy. Without this, the scan account is denied interactive, Remote Desktop, batch and service logon, and a reused account in a privileged group stops the setup.'
-    $chkSkipFw = New-Option -Text 'Skip firewall changes (-SkipFirewall)' -Top 316 `
+    $chkSkipFw = New-Option -Text 'Skip &firewall changes (-SkipFirewall)' -Top 316 `
         -Hint 'Leave Windows Firewall untouched (GPO)' `
         -Info 'Leaves Windows Firewall untouched. Use when the SMB inbound rules are managed by Group Policy.'
-    $chkSkipVerify = New-Option -Text 'Skip verification probes (-SkipVerification)' -Top 342 `
+    $chkSkipVerify = New-Option -Text 'Sk&ip verification probes (-SkipVerification)' -Top 342 `
         -Hint 'Skip the listener and write/delete probes' `
         -Info 'Skips the SMB listener test and the credentialed write/delete test. Use when setup must not open a network connection or touch the share.'
 
-    $btnPreview = New-Action -Text 'Preview' -Left 152
+    $btnPreview = New-Action -Text 'Pre&view' -Left 152
     $toolTip.SetToolTip($btnPreview, 'Preview planned changes')
-    $btnCreate = New-Action -Text 'Create' -Left 248
+    $btnCreate = New-Action -Text '&Create' -Left 248
     $toolTip.SetToolTip($btnCreate, 'Apply the setup (needs admin)')
-    $btnCopy = New-Action -Text 'Copy settings' -Left 344 -Width 110
+    $btnCopy = New-Action -Text 'Cop&y settings' -Left 344 -Width 110
     $btnCopy.Enabled = $false
     $toolTip.SetToolTip($btnCopy, 'Copy copier settings')
-    $btnHelp = New-Action -Text "$([char]0x2139)  Help" -Left 462 -Width 80
+    $btnHelp = New-Action -Text "$([char]0x2139)  &Help" -Left 462 -Width 80
     $btnHelp.Font = [System.Drawing.Font]::new('Segoe UI Symbol', 9)
     $toolTip.SetToolTip($btnHelp, 'Open the setup guide')
-    $btnClose = New-Action -Text 'Close' -Left 552
+    $btnClose = New-Action -Text 'C&lose' -Left 552
     $toolTip.SetToolTip($btnClose, 'Close the dialog')
 
     $lblStatus = [System.Windows.Forms.Label]::new()
@@ -312,7 +312,7 @@ function Show-ScanShare {
         }
     })
 
-    $btnCreate.Add_Click({
+    $createAction = {
         $userName = $txtUser.Text.Trim()
         $existingUser = $null
         try { $existingUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue } catch { $existingUser = $null }
@@ -376,7 +376,8 @@ function Show-ScanShare {
             $btnPreview.Enabled = $true
             $btnCreate.Enabled = $true
         }
-    })
+    }
+    $btnCreate.Add_Click($createAction)
 
     $btnCopy.Add_Click({
         $summary = [string]$txtResults.Tag
@@ -387,6 +388,17 @@ function Show-ScanShare {
     })
 
     $btnClose.Add_Click({ $form.Close() })
+
+    # Alt+Enter fires the primary action (Create), matching the AcceptButton.
+    # KeyPreview lets the form see the key before a focused control handles it.
+    $form.KeyPreview = $true
+    $form.Add_KeyDown({
+        param($sender, $e)
+        if ($e.Alt -and ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter)) {
+            $e.SuppressKeyPress = $true
+            & $createAction
+        }
+    })
 
     $helpGuide = @'
 SCAN-TO-FOLDER SETUP - QUICK GUIDE
@@ -447,6 +459,17 @@ OPTIONS
       Group Policy).
   Skip verification probes
       Skips the SMB listener test and the credentialed write/delete test.
+
+KEYBOARD
+  Alt+Enter            Create (same as the Create button).
+  Alt+D  Alt+S  Alt+U  Alt+P  Alt+R
+                       Destination folder, Share name, User name, Password,
+                       Remote address.
+  Alt+B  Alt+V  Alt+C  Alt+Y  Alt+H  Alt+L
+                       Browse, Preview, Create, Copy settings, Help, Close.
+  Alt+E  Alt+K  Alt+F  Alt+I
+                       Reset password, Skip account hardening, Skip firewall,
+                       Skip verification.
 
 ON THE COPIER
   Host / server : this PC name, or its IP address
