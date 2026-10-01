@@ -6,6 +6,13 @@ and `CONTEXT.md`: self-contained (private helpers copied, not shared),
 PowerShell 7 native, structured object output, lazy-loading via module autoload,
 and explicit whitelist entries in `.gitignore`.
 
+## Feature roadmap
+
+- **`New-QRCode` - split `Text / URL` into `Text` and `URL`.** Both keep the same
+  field size. In `URL`, more than one URL can be pasted (one per line) and the
+  dialog generates a code for each, with small `<` / `>` buttons beneath the
+  preview to step through them.
+
 ## Standardization backlog (module review, September 2026)
 
 A full audit of the custom modules against `AGENTS.md` / `CONTEXT.md` produced
