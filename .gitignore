@@ -35,6 +35,11 @@
 !Modules/Get-NetworkDiagnostics/**
 !Modules/Get-PrinterInfo/
 !Modules/Get-PrinterInfo/**
+!Modules/New-QRCode/
+!Modules/New-QRCode/**
+# The downloaded QRCoder binary must never be tracked; keep it out even if a user
+# points $env:NEWQRCODE_LIB at the module folder.
+Modules/New-QRCode/lib/
 !Modules/New-ScanShare/
 !Modules/New-ScanShare/**
 !Modules/Compress-Video/
