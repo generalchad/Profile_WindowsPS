@@ -13,6 +13,44 @@ and explicit whitelist entries in `.gitignore`.
   dialog generates a code for each, with small `<` / `>` buttons beneath the
   preview to step through them.
 
+### FTP/SFTP scan destinations (planned)
+
+Let a copier scan to this PC over FTP (IIS) or SFTP (OpenSSH) alongside the
+existing SMB-only `New-ScanShare`. Not implemented yet; the design decisions are
+locked so the eventual work does not reopen them.
+
+- **Shape: new sibling modules, not a `-Protocol` parameter on
+  `New-ScanShare`.** Planned `New-FtpScanShare` and `New-SftpScanShare`, each
+  self-contained (private helpers copied, not shared). `New-ScanShare` stays
+  SMB-only, 5.1-compatible, and portable; its tested SMB path and the `Deploy`
+  bundle are not touched.
+- **Protocols: plain FTP via IIS and SFTP via OpenSSH.** FTPS (explicit/implicit
+  TLS) is deferred until a cert story is worthwhile.
+- **Hardening differs per protocol.** The current SMB-only hardening (deny
+  interactive/RDP/batch/service; allow SMB network logon) is wrong for both:
+  IIS FTP does not authenticate over SMB, and OpenSSH SFTP needs a chroot split.
+  Each module gets its own logon-rights model.
+- **FTP (IIS) notes.** Prereqs `IIS-FTPServer`, `IIS-FTPExtensibility`, and
+  `Web-Server` (elevated, may need a reboot). Configure through
+  `Microsoft.Web.Administration.ServerManager` - it works in both PowerShell 7
+  and 5.1, whereas `WebAdministration` is 5.1-only. Basic auth for a dedicated
+  local account, anonymous disabled, a passive data-channel port range with
+  matching inbound firewall rules, and the folder/NTFS lockdown pattern reused
+  from `New-ScanShare`.
+- **SFTP (OpenSSH) notes.** Prereq `OpenSSH.Server~~~~0.0.1.0`; generate host
+  keys (`ssh-keygen -A`) and set `sshd` to Automatic. A `Match User` block uses
+  `ForceCommand internal-sftp` with `ChrootDirectory`, password auth, and
+  forwarding disabled. The chroot directory must be admin-owned and non-writable
+  by the account, so the layout is two-level (admin-owned root, writable child)
+  and therefore conflicts with `New-ScanShare`'s "Modify on the destination
+  root". Validate with `sshd -t`, restart `sshd`, open TCP 22.
+- **GUI.** `Show-ScanShare` gains a protocol selector that dispatches only when
+  the backing command exists; SMB stays the default.
+- **`Test-FileShare` extension (separate, lower risk).** Grow it from a banner
+  grab to credentialed checks: FTP login, `PWD`/list, and a write probe; an SFTP
+  probe needs an SSH library (SSH.NET, downloaded on demand like `New-QRCode`'s
+  QRCoder) or key-based `sftp`. Ports 21/22/990 are already probed.
+
 ## Standardization backlog (module review, September 2026)
 
 A full audit of the custom modules against `AGENTS.md` / `CONTEXT.md` produced
