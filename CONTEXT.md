@@ -7,7 +7,7 @@ shell startup fast; everything here is organized so that nothing runs eagerly
 unless it must.
 
 - Shell: PowerShell 7 (pwsh)
-- Entry point: `Microsoft.PowerShell_profile.ps1` ("the loader")
+- Entry point: `Microsoft.Powershell_profile.ps1` ("the loader")
 - OS: Windows 11
 
 Agent rules and conventions live in `AGENTS.md`; planned modules in `ROADMAP.md`.
