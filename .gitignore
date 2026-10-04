@@ -66,3 +66,5 @@ Modules/New-QRCode/lib/
 !Modules/Invoke-Elevation/**
 !Modules/Get-CustomModule/
 !Modules/Get-CustomModule/**
+!Modules/New-CliCommandShortcut/
+!Modules/New-CliCommandShortcut/**
