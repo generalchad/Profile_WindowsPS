@@ -8,7 +8,7 @@
 RootModule = 'New-CliCommandShortcut.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.0'
+ModuleVersion = '1.1.0'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -60,6 +60,19 @@ PrivateData = @{
 
         # A URL to the license for this module.
         LicenseUri = 'https://www.apache.org/licenses/LICENSE-2.0'
+
+        # ReleaseNotes of this module
+        ReleaseNotes = @'
+1.1.0
+  - Default selection now skips the invoking command: -Skip defaults to 1 and
+    New-CliCommandShortcut entries are never selected, so the shortcut points at
+    the command run just before.
+  - Added -Skip, -Scan, -Index, -List, and -IncludeDestructive for history
+    selection and inspection.
+
+1.0.0
+  - Initial release.
+'@
 
     } # End of PSData hashtable
 

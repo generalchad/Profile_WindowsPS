@@ -2,6 +2,8 @@
 
 Set-StrictMode -Version Latest
 
+$script:ModuleCommandName = 'New-CliCommandShortcut'
+
 # Classification is a deny-list rather than an allow-list: an unrecognised
 # command (git, npm, docker, a user function) is allowed. Only commands known
 # to mutate or destroy state are rejected, and the search walks further back
@@ -26,7 +28,8 @@ $script:SafeExceptions = @(
 )
 
 # PSReadLine rewrites the whole file on exit, so only the tail is relevant and
-# a bounded read keeps the cmdlet fast on a multi-megabyte history.
+# a bounded read keeps the cmdlet fast on a multi-megabyte history. Callers can
+# widen or narrow the window with -Scan.
 $script:HistoryTailLines = 500
 
 function New-CliShortcutError {
@@ -140,49 +143,63 @@ function Test-CliDestructiveCommand {
     return $false
 }
 
-function Find-CliLastSafeCommand {
+function Get-CliHistoryClassification {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $false)]
-        [string[]]$Lines,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Command,
 
         [Parameter(Mandatory = $false)]
-        [string[]]$Exclude
+        [string[]]$Exclude,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludeDestructive
     )
 
-    if (-not $Lines) { return $null }
-
-    for ($i = $Lines.Count - 1; $i -ge 0; $i--) {
-        $candidate = $Lines[$i].Trim()
-        if (-not $candidate -or $candidate.StartsWith('#')) { continue }
-
-        # A multi-line command is stored across several lines; only the final
-        # line is seen here, and it usually does not parse on its own. Requiring
-        # a clean parse skips those fragments rather than building a broken link.
-        $tokens = $null
-        $parseErrors = $null
-        $ast = [System.Management.Automation.Language.Parser]::ParseInput($candidate, [ref]$tokens, [ref]$parseErrors)
-        if ($parseErrors.Count -gt 0) { continue }
-
-        $commandAsts = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true))
-        if ($commandAsts.Count -eq 0) { continue }
-
-        $isDestructive = $false
-        foreach ($commandAst in $commandAsts) {
-            $name = $commandAst.GetCommandName()
-            if (-not $name) { continue }
-            $leaf = ($name -split '\\')[-1]
-            if (Test-CliDestructiveCommand -Name $leaf -ExtraPatterns $Exclude) {
-                $isDestructive = $true
-                break
-            }
-        }
-        if ($isDestructive) { continue }
-
-        return $candidate
+    $trimmed = $Command.Trim()
+    if (-not $trimmed) {
+        return [PSCustomObject]@{ Eligible = $false; CommandName = $null; Reason = 'blank' }
+    }
+    if ($trimmed.StartsWith('#')) {
+        return [PSCustomObject]@{ Eligible = $false; CommandName = $null; Reason = 'comment' }
     }
 
-    return $null
+    # A multi-line command is stored across several lines; only the final line
+    # is seen here, and it usually does not parse on its own. Requiring a clean
+    # parse skips those fragments rather than building a broken link.
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($trimmed, [ref]$tokens, [ref]$parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        return [PSCustomObject]@{ Eligible = $false; CommandName = $null; Reason = 'parse error' }
+    }
+
+    $commandAsts = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true))
+    if ($commandAsts.Count -eq 0) {
+        return [PSCustomObject]@{ Eligible = $false; CommandName = $null; Reason = 'no command' }
+    }
+
+    $names = @(foreach ($commandAst in $commandAsts) {
+        $name = $commandAst.GetCommandName()
+        if ($name) { ($name -split '\\')[-1] }
+    })
+
+    foreach ($name in $names) {
+        if ($name -eq $script:ModuleCommandName) {
+            return [PSCustomObject]@{ Eligible = $false; CommandName = $names[0]; Reason = 'self' }
+        }
+    }
+
+    if (-not $IncludeDestructive) {
+        foreach ($name in $names) {
+            if (Test-CliDestructiveCommand -Name $name -ExtraPatterns $Exclude) {
+                return [PSCustomObject]@{ Eligible = $false; CommandName = $names[0]; Reason = 'destructive' }
+            }
+        }
+    }
+
+    return [PSCustomObject]@{ Eligible = $true; CommandName = $names[0]; Reason = 'eligible' }
 }
 
 function New-CliShortcut {
@@ -225,26 +242,31 @@ function New-CliShortcut {
 function New-CliCommandShortcut {
     <#
     .SYNOPSIS
-        Creates a .lnk that re-runs the most recent non-destructive CLI command.
+        Creates a .lnk that re-runs a recent non-destructive CLI command.
 
     .DESCRIPTION
         Reads the PSReadLine history file, walks backwards from the newest entry,
-        and bakes the first command that is both parseable and non-destructive
-        into a Windows shortcut. Double-clicking the shortcut launches pwsh and
-        re-runs that command in the captured working directory, with the normal
-        profile loaded.
+        and bakes the first eligible command into a Windows shortcut. A command is
+        eligible when it parses cleanly, is not an invocation of this cmdlet, and
+        is not destructive. Double-clicking the shortcut launches pwsh and re-runs
+        that command in the captured working directory, with the normal profile
+        loaded.
+
+        Because the invocation of this cmdlet is itself the newest history entry,
+        -Skip defaults to 1 and entries naming New-CliCommandShortcut are never
+        selected, so the shortcut points at the command you ran just before.
 
         Destructive commands are filtered by a deny-list of verbs (Remove, Format,
         Clear, Reset, Stop, Restart, Disable, Uninstall, ...) and native tools
         (rm, del, rmdir, format, diskpart, shutdown, taskkill, ...), with harmless
         members such as Format-Table and Clear-Host excepted. Multi-line and
         unparseable history fragments are skipped. Use -Exclude to extend the
-        deny-list.
+        deny-list and -IncludeDestructive to disable it.
 
     .PARAMETER Path
         Where to write the shortcut: either a directory (an existing one, or a
         path ending in a slash) or a full .lnk path. Defaults to the current
-        user's Desktop.
+        user's Desktop. Ignored with -List.
 
     .PARAMETER Name
         The shortcut file name. Defaults to the selected command, sanitised and
@@ -268,14 +290,44 @@ function New-CliCommandShortcut {
     .PARAMETER Force
         Overwrite an existing shortcut at the target path.
 
+    .PARAMETER Skip
+        Ignore this many of the most-recent history entries before scanning.
+        Defaults to 1, which drops the invoking command.
+
+    .PARAMETER Scan
+        How many history entries to read from the end of the file. Defaults to 500.
+
+    .PARAMETER Index
+        Which eligible command to use, counting from the newest. 1 (the default)
+        is the first eligible command after -Skip.
+
+    .PARAMETER List
+        Emit the scanned history entries as objects (Index, Ordinal, Command,
+        CommandName, Eligible, Selected, Reason) and create nothing. Use it to
+        inspect history and pick an -Index.
+
+    .PARAMETER IncludeDestructive
+        Disable the destructive deny-list and allow any command.
+
     .OUTPUTS
-        PSCustomObject with ShortcutPath, Command, TargetPath, Arguments,
-        WorkingDirectory, and HistoryPath.
+        By default, a PSCustomObject with ShortcutPath, Command, TargetPath,
+        Arguments, WorkingDirectory, and HistoryPath. With -List, one object per
+        scanned history entry.
 
     .EXAMPLE
         New-CliCommandShortcut
 
-        Creates a Desktop shortcut to the last non-destructive command.
+        Creates a Desktop shortcut to the command run just before this one.
+
+    .EXAMPLE
+        New-CliCommandShortcut -List
+
+        Lists the recent history with each entry's eligibility and reason.
+
+    .EXAMPLE
+        New-CliCommandShortcut -Index 2 -Force
+
+        Uses the second eligible command instead of the first.
 
     .EXAMPLE
         New-CliCommandShortcut -Path . -Name 'last-run' -Force
@@ -304,7 +356,25 @@ function New-CliCommandShortcut {
         [switch]$CloseWhenDone,
 
         [Parameter()]
-        [switch]$Force
+        [switch]$Force,
+
+        [Parameter()]
+        [ValidateRange(0, 2147483647)]
+        [int]$Skip = 1,
+
+        [Parameter()]
+        [ValidateRange(1, 2147483647)]
+        [int]$Scan = $script:HistoryTailLines,
+
+        [Parameter()]
+        [ValidateRange(1, 2147483647)]
+        [int]$Index = 1,
+
+        [Parameter()]
+        [switch]$List,
+
+        [Parameter()]
+        [switch]$IncludeDestructive
     )
 
     $historyFile = Resolve-CliHistoryPath -Override $HistoryPath
@@ -315,11 +385,55 @@ function New-CliCommandShortcut {
             -Category ([System.Management.Automation.ErrorCategory]::ObjectNotFound)))
     }
 
-    $lines = @(Get-Content -LiteralPath $historyFile -Tail $script:HistoryTailLines -ErrorAction Stop)
-    $command = Find-CliLastSafeCommand -Lines $lines -Exclude $Exclude
+    $allLines = @(Get-Content -LiteralPath $historyFile -Tail $Scan -ErrorAction Stop)
+    $window = $allLines
+    if ($Skip -gt 0) {
+        $keep = $allLines.Count - $Skip
+        $window = if ($keep -gt 0) { @($allLines[0..($keep - 1)]) } else { @() }
+    }
+    $ordered = @($window)
+    [array]::Reverse($ordered)
+
+    $listed = [System.Collections.Generic.List[object]]::new()
+    $ordinal = 0
+    $eligibleCount = 0
+    $command = $null
+
+    foreach ($line in $ordered) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $ordinal++
+
+        $classification = Get-CliHistoryClassification -Command $line -Exclude $Exclude -IncludeDestructive:$IncludeDestructive
+
+        $pick = $null
+        $isSelected = $false
+        if ($classification.Eligible) {
+            $eligibleCount++
+            $pick = $eligibleCount
+            if ($pick -eq $Index) {
+                $isSelected = $true
+                $command = $line.Trim()
+            }
+        }
+
+        if ($List) {
+            $listed.Add([PSCustomObject]@{
+                Index       = $pick
+                Ordinal     = $ordinal
+                Command     = $line.Trim()
+                CommandName = $classification.CommandName
+                Eligible    = $classification.Eligible
+                Selected    = $isSelected
+                Reason      = $classification.Reason
+            })
+        }
+    }
+
+    if ($List) { return $listed }
+
     if (-not $command) {
         $PSCmdlet.ThrowTerminatingError((New-CliShortcutError `
-            -Message "No non-destructive command was found in the last $($script:HistoryTailLines) history entries." `
+            -Message "No eligible command was found for -Skip $Skip -Scan $Scan -Index $Index ($eligibleCount eligible entries). Try -List to inspect history." `
             -ErrorId 'NoSafeCommandFound' `
             -Category ([System.Management.Automation.ErrorCategory]::ObjectNotFound)))
     }
