@@ -133,8 +133,6 @@ deferred and listed in rough priority order.
 
 ### Phase 7 - dead code and dedup
 
-- Delete tracked dead artifact
-  `Modules/Rename-MediaFile/Private/Show-RenamePreview.ps1.old`.
 - Remove unused helpers: `Get-ElevationHint` in Invoke-Elevation, unreachable
   `-DryRun` parameters in Restart-PrintStack, `-IncludeDisconnected` in
   Restart-NetworkStack, and `Add-PrintStackAllowListEntry`'s unused `$Driver`.
