@@ -3,25 +3,30 @@ function Show-RenamePreview {
     .SYNOPSIS
         Renders the pending operation plan without truncating any names.
     .DESCRIPTION
-        Displays pending operations in an interactive Out-GridView window by default,
-        providing searchable, sortable, filterable preview of all changes.
+        Prints pending operations to the terminal by default, colour coded by type,
+        with custom pagination and silent key handling - no keybind instructions
+        displayed, Q/Escape quits gracefully without errors.
 
-        Automatically falls back to console pagination when Out-GridView is unavailable
-        (SSH/remote sessions, headless environments) or when -NoPager is specified.
-
-        Console mode uses custom pagination with silent key handling - no keybind
-        instructions displayed, Q/Escape quits gracefully without errors.
+        Supplying -GridView opens the same operations in an interactive,
+        searchable, sortable Out-GridView window instead. If Out-GridView is
+        unavailable (SSH/remote sessions, headless environments) it falls back to
+        the terminal output.
     .PARAMETER Operations
         Pending operation objects.
+    .PARAMETER GridView
+        Open Out-GridView instead of printing to the terminal. Falls back to the
+        terminal when the grid is unavailable.
     .PARAMETER NoPager
-        Force console output mode instead of Out-GridView. Also disables pagination
-        when output is small enough to fit on screen.
+        Print the whole report at once instead of paging when it overflows the
+        screen. Useful for automation, scripting, or SSH sessions.
     #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, Position = 0)]
         [AllowEmptyCollection()]
         [PSCustomObject[]]$Operations,
+
+        [switch]$GridView,
 
         [switch]$NoPager
     )
@@ -30,41 +35,41 @@ function Show-RenamePreview {
         return
     }
 
-    # Transform operations into a grid-friendly format
-    $GridData = foreach ($Op in $Operations) {
-        $BaseProps = [ordered]@{
-            Type    = $Op.Type
-            OldName = $Op.OldName
-            NewName = $Op.NewName
-        }
-
-        if ($Op.Type -eq 'Delete') {
-            $Size = if ($Op.Size -lt 1KB) { "$($Op.Size) B" } else { '{0:N1} KB' -f ($Op.Size / 1KB) }
-            $Dest = if ($Op.Permanent) { 'Permanent' } else { 'Recycle Bin' }
-            $BaseProps['Size'] = $Size
-            $BaseProps['Destination'] = $Dest
-            $BaseProps['Location'] = Split-Path -Path $Op.OldPath -Parent
-            $BaseProps['Moved'] = $false
-        } else {
-            $BaseProps['Moved'] = if ($Op.PSObject.Properties['Moved']) { $Op.Moved } else { $false }
-            if ($Op.Moved) {
-                $BaseProps['NewLocation'] = Split-Path -Path $Op.NewPath -Parent
+    # Out-GridView is opt-in. Build the grid-shaped projection and open it only
+    # when asked; otherwise fall straight through to the terminal report.
+    if ($GridView) {
+        $GridData = foreach ($Op in $Operations) {
+            $BaseProps = [ordered]@{
+                Type    = $Op.Type
+                OldName = $Op.OldName
+                NewName = $Op.NewName
             }
-            if ($Op.PSObject.Properties['Detail'] -and $Op.Detail) {
-                $BaseProps['Note'] = $Op.Detail
+
+            if ($Op.Type -eq 'Delete') {
+                $Size = if ($Op.Size -lt 1KB) { "$($Op.Size) B" } else { '{0:N1} KB' -f ($Op.Size / 1KB) }
+                $Dest = if ($Op.Permanent) { 'Permanent' } else { 'Recycle Bin' }
+                $BaseProps['Size'] = $Size
+                $BaseProps['Destination'] = $Dest
+                $BaseProps['Location'] = Split-Path -Path $Op.OldPath -Parent
+                $BaseProps['Moved'] = $false
+            } else {
+                $BaseProps['Moved'] = if ($Op.PSObject.Properties['Moved']) { $Op.Moved } else { $false }
+                if ($Op.Moved) {
+                    $BaseProps['NewLocation'] = Split-Path -Path $Op.NewPath -Parent
+                }
+                if ($Op.PSObject.Properties['Detail'] -and $Op.Detail) {
+                    $BaseProps['Note'] = $Op.Detail
+                }
             }
+
+            $BaseProps['OldPath'] = $Op.OldPath
+            if ($Op.NewPath) {
+                $BaseProps['NewPath'] = $Op.NewPath
+            }
+
+            [PSCustomObject]$BaseProps
         }
 
-        $BaseProps['OldPath'] = $Op.OldPath
-        if ($Op.NewPath) {
-            $BaseProps['NewPath'] = $Op.NewPath
-        }
-
-        [PSCustomObject]$BaseProps
-    }
-
-    # Try Out-GridView first (unless explicitly disabled)
-    if (-not $NoPager) {
         try {
             Write-Host "`n─────────────────────────────────────────────────────────" -ForegroundColor DarkCyan
             Write-Host " PENDING OPERATIONS: $($Operations.Count)" -ForegroundColor Cyan
@@ -82,13 +87,13 @@ function Show-RenamePreview {
             $GridData | Out-GridView -Title "Rename-MediaFile: Pending Operations ($($Operations.Count) items)" -Wait
             return  # Success - we're done
         } catch {
-            Write-Verbose "Out-GridView unavailable, falling back to console pagination: $_"
+            Write-Verbose "Out-GridView unavailable, falling back to console output: $_"
             Write-Host "`nFalling back to console output...`n" -ForegroundColor Yellow
         }
     }
 
     # =========================================================================
-    # CONSOLE FALLBACK: Custom pagination with color-coded output
+    # TERMINAL OUTPUT: custom pagination with a colour-coded report
     # =========================================================================
 
     # Colour and label per operation type.

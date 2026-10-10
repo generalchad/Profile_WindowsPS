@@ -12,7 +12,7 @@
 RootModule = 'Rename-MediaFile.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.2.0'
+ModuleVersion = '0.3.0'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -129,6 +129,12 @@ PrivateData = @{
 
         # ReleaseNotes of this module
         ReleaseNotes = @'
+0.3.0
+  - The pending-operations preview now prints to the terminal by default
+    instead of opening Out-GridView. Pass -GridView to opt back into the
+    interactive grid. -NoPager now only controls terminal pagination.
+  - Removed the tracked dead artifact Show-RenamePreview.ps1.old.
+
 0.2.0
   - Refactored the single monolithic .psm1 into Private\ and Public\ files
     with a thin loader. Helper scriptblocks are now real functions, which

@@ -21,7 +21,8 @@ function Rename-MediaFile {
         rename; the sidecar simply stays untagged.
 
         Features a safe preview mode. If run without -Force, it aggregates all changes, checks for conflicts,
-        displays a full-width preview, and asks for confirmation (with an interactive per-item approval option).
+        prints a colour-coded preview to the terminal, and asks for confirmation (with an interactive per-item
+        approval option). Use -GridView to review the plan in an Out-GridView window instead.
     .PARAMETER TargetDirectory
         One or more directories to process. Defaults to the current location.
     .PARAMETER MediaExtensions
@@ -50,9 +51,12 @@ function Rename-MediaFile {
         Note: .nfo files are never treated as junk because Jellyfin and Kodi read them as metadata.
     .PARAMETER PermanentDelete
         Delete junk outright instead of sending it to the Recycle Bin.
+    .PARAMETER GridView
+        Review the pending plan in an interactive Out-GridView window instead of printing it to the
+        terminal. Falls back to terminal output when the grid is unavailable.
     .PARAMETER NoPager
-        Force console output mode instead of Out-GridView. When in console mode, also disables
-        pagination if the output fits on screen. Useful for automation, scripting, or SSH sessions.
+        Print the whole report at once instead of paging when it overflows the screen. Useful for
+        automation, scripting, or SSH sessions.
     .PARAMETER Force
         Apply every change without confirmation.
     .PARAMETER PassThru
@@ -103,6 +107,9 @@ function Rename-MediaFile {
 
         [Parameter(Mandatory = $false)]
         [switch]$PermanentDelete,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$GridView,
 
         [Parameter(Mandatory = $false)]
         [switch]$NoPager,
@@ -417,7 +424,7 @@ function Rename-MediaFile {
             Sort-Object -Property @{ Expression = { $TypeRank[$_.Type] } },
                                   @{ Expression = 'Depth'; Descending = $true })
 
-        Show-RenamePreview -Operations $OrderedRenames -NoPager:$NoPager
+        Show-RenamePreview -Operations $OrderedRenames -GridView:$GridView -NoPager:$NoPager
 
         # --- Orphan report ---
         if ($OrphanSubtitles.Count -gt 0) {
