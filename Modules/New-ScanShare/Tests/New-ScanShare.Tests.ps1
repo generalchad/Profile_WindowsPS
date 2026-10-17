@@ -381,6 +381,67 @@ Test-Case 'Firewall candidates correlate by InstanceID when Name differs' {
     $candidates[0].InstanceID -eq 'GUID-123'
 }
 
+Test-Case 'Firewall plan: -DedicatedOnly never enables built-in rules and creates the scoped rule' {
+    $mod = Get-Module New-ScanShare
+    $rules = @(
+        [pscustomobject]@{ Name = 'FPS-SMB-In-TCP-NoScope'; Profile = 'Domain'; Enabled = 'False'; Action = 'Allow'; LocalPort = '445' },
+        [pscustomobject]@{ Name = 'FPS-SMB-In-TCP'; Profile = 'Private'; Enabled = 'False'; Action = 'Allow'; LocalPort = '445' }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($r) Get-SmbFirewallPlan -Rules $r -DedicatedOnly }) $rules
+
+    $plan.RulesToEnable.Count -eq 0 -and
+    $plan.DedicatedAction -eq 'Create' -and
+    @($plan.DedicatedProfiles) -contains 'Domain' -and
+    @($plan.DedicatedProfiles) -contains 'Private' -and
+    $plan.BypassingRules.Count -eq 0
+}
+
+Test-Case 'Firewall plan: -DedicatedOnly reports enabled built-in rules that bypass the scope' {
+    $mod = Get-Module New-ScanShare
+    $rules = @(
+        [pscustomobject]@{ Name = 'FPS-SMB-In-TCP-NoScope'; Profile = 'Domain'; Enabled = 'True'; Action = 'Allow'; LocalPort = '445' },
+        [pscustomobject]@{ Name = 'ScanShare-SMB-In'; Profile = 'Domain, Private'; Enabled = 'True'; Action = 'Allow'; LocalPort = '445' }
+    )
+    $plan = & $mod.NewBoundScriptBlock({ param($r) Get-SmbFirewallPlan -Rules $r -DedicatedOnly }) $rules
+
+    $plan.Status -eq 'Exists' -and
+    $plan.BypassingRules.Count -eq 1 -and
+    $plan.BypassingRules[0].Name -eq 'FPS-SMB-In-TCP-NoScope'
+}
+
+Test-Case 'Firewall: -RemoteAddress warns about a built-in rule that allows Any' {
+    $mod = Get-Module New-ScanShare
+    $testBlock = {
+        function Test-Elevation { $true }
+        function Get-LocalUser { [pscustomobject]@{ Name = 'scanner'; Enabled = $true; PasswordExpires = $false } }
+        function Get-SmbShare { $null }
+        function Get-NetConnectionProfile { @() }
+        function Get-NetFirewallRule {
+            param([string]$Name, [string]$Direction, [string]$Group, [string]$DisplayGroup)
+            if ($Name -eq 'ScanShare-SMB-In') {
+                [pscustomobject]@{ Name = 'ScanShare-SMB-In'; InstanceID = 'ScanShare-SMB-In'; Profile = 'Domain, Private'; Enabled = 'True'; Action = 'Allow' }
+            }
+            elseif ($Group) {
+                [pscustomobject]@{ Name = 'FPS-SMB-In-TCP-NoScope'; InstanceID = 'FPS-SMB-In-TCP-NoScope'; Profile = 'Domain'; Enabled = 'True'; Action = 'Allow' }
+            }
+        }
+        function Get-NetFirewallPortFilter {
+            process { [pscustomobject]@{ InstanceID = $_.Name; LocalPort = '445' } }
+        }
+        function Get-NetFirewallAddressFilter {
+            process { if ($_.Name -eq 'ScanShare-SMB-In') { [pscustomobject]@{ RemoteAddress = '10.20.0.0/16' } } else { [pscustomobject]@{ RemoteAddress = 'Any' } } }
+        }
+        function Set-NetFirewallRule { throw 'Set-NetFirewallRule must not run under -WhatIf' }
+
+        New-ScanShare -Path 'C:\ScansFwTest' -RemoteAddress '10.20.0.0/16' -WhatIf
+    }
+    $res = & $mod.NewBoundScriptBlock($testBlock)
+
+    $warning = $res.Steps | Where-Object { $_.Step -eq 'Firewall' -and $_.Status -eq 'Warning' }
+    @($warning).Count -eq 1 -and
+    $warning.Detail -like "*FPS-SMB-In-TCP-NoScope*from Any*"
+}
+
 # 6b. Protected Path Guard
 $protectedCases = @(
     @{ Path = 'C:\Windows'; Allowed = $false },

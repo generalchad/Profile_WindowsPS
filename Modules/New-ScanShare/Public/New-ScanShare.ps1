@@ -219,7 +219,7 @@ function New-ScanShare {
     $addStep = {
         param([string]$Step, [string]$Status, [string]$Detail)
         $steps.Add([pscustomobject]@{ Step = $Step; Status = $Status; Detail = $Detail })
-        $color = @{ Created = 'Green'; Updated = 'Green'; Passed = 'Green'; Exists = 'DarkGray'; Skipped = 'DarkGray'; WhatIf = 'Yellow'; Failed = 'Red' }[$Status]
+        $color = @{ Created = 'Green'; Updated = 'Green'; Passed = 'Green'; Exists = 'DarkGray'; Skipped = 'DarkGray'; WhatIf = 'Yellow'; Warning = 'Yellow'; Failed = 'Red' }[$Status]
         Write-Host ('  {0,-9} {1,-12} {2}' -f $Status, $Step, $Detail) -ForegroundColor $color
     }
 
@@ -437,7 +437,16 @@ function New-ScanShare {
     else {
         try {
             $smbCandidateRules = Get-SmbFirewallCandidates
-            $plan = Get-SmbFirewallPlan -Rules $smbCandidateRules
+            $scopeRequested = $PSBoundParameters.ContainsKey('RemoteAddress')
+            $plan = Get-SmbFirewallPlan -Rules $smbCandidateRules -DedicatedOnly:$scopeRequested
+
+            if ($plan.PSObject.Properties['BypassingRules']) {
+                foreach ($wideRule in @($plan.BypassingRules)) {
+                    $wideFilter = $wideRule | Get-NetFirewallAddressFilter -ErrorAction SilentlyContinue
+                    $wideScope = if ($wideFilter) { @($wideFilter.RemoteAddress) -join ', ' } else { 'unknown' }
+                    & $addStep 'Firewall' 'Warning' ("rule '{0}' ({1}) already allows TCP 445 from {2}, so -RemoteAddress does not restrict it. To enforce the scope: Disable-NetFirewallRule -Name '{0}'" -f $wideRule.Name, $wideRule.Profile, $wideScope)
+                }
+            }
 
             $needsAddressUpdate = $false
             if ($plan.DedicatedRule -and $PSBoundParameters.ContainsKey('RemoteAddress')) {

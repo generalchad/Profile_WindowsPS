@@ -167,7 +167,7 @@ function Get-ScanSharePlan {
     }
     else {
         $candidates = Get-SmbFirewallCandidates
-        $fwPlan = Get-SmbFirewallPlan -Rules $candidates
+        $fwPlan = Get-SmbFirewallPlan -Rules $candidates -DedicatedOnly:$RemoteAddressSpecified
 
         $needsAddressUpdate = $false
         if ($RemoteAddressSpecified) {
