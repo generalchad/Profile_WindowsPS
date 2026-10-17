@@ -281,7 +281,7 @@ function Update-OhMyPoshCache {
     param()
 
     $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
-    $OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
+    $OmpCache = Join-Path $env:LOCALAPPDATA "PowerShell\ProfileCache\omp.cache.ps1"
 
     if (-not (Get-Command oh-my-posh -ErrorAction SilentlyContinue)) {
         Write-Warning "Oh-My-Posh is not installed or not in PATH."
@@ -309,7 +309,7 @@ function Update-ZoxideCache {
     [CmdletBinding()]
     param()
 
-    $ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
+    $ZoxideCache = Join-Path $env:LOCALAPPDATA "PowerShell\ProfileCache\zoxide.cache.ps1"
 
     if (-not (Get-Command zoxide -ErrorAction SilentlyContinue)) {
         Write-Warning "Zoxide is not installed or not in PATH."

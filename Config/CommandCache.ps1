@@ -18,7 +18,12 @@ $script:PwshEnvCommandNames = @(
     'oh-my-posh', 'zoxide'
 )
 
-$script:PwshEnvCacheFile = Join-Path $env:TEMP 'pwsh-env.cache.ps1'
+# Every shell, elevated ones included, dot-sources the startup caches, so they stay
+# out of %TEMP%: it is the usual drop zone for installers and malware and far less
+# watched than LOCALAPPDATA. The loader and ProfileTools read this same folder.
+$script:ProfileCacheDirectory = Join-Path $env:LOCALAPPDATA 'PowerShell\ProfileCache'
+[void][System.IO.Directory]::CreateDirectory($script:ProfileCacheDirectory)
+$script:PwshEnvCacheFile = Join-Path $script:ProfileCacheDirectory 'pwsh-env.cache.ps1'
 
 function Get-PwshEnvPathHash {
     $input = $env:PATH + [IO.Path]::PathSeparator + $env:PATHEXT

@@ -91,7 +91,7 @@ if ($ProfileTrace) { Mark 'Aliases' }
 
 # Oh-My-Posh (Optimized Caching - Regenerate if cache missing or stale)
 $OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\gruvbox.omp.json"
-$OmpCache = Join-Path $env:TEMP "omp.cache.ps1"
+$OmpCache = Join-Path $ProfileCacheDirectory "omp.cache.ps1"
 $OmpExe   = Resolve-CachedCommand 'oh-my-posh'
 
 if ($OmpExe -and (Test-Path $OmpTheme)) {
@@ -149,13 +149,13 @@ if ($OmpExe -and (Test-Path $OmpTheme)) {
 if ($ProfileTrace) { Mark 'oh-my-posh' }
 
 # Zoxide (Optimized Caching - Only regenerate if cache missing)
-$ZoxideCache = Join-Path $env:TEMP "zoxide.cache.ps1"
+$ZoxideCache = Join-Path $ProfileCacheDirectory "zoxide.cache.ps1"
 $ZoxideExe   = Resolve-CachedCommand 'zoxide'
 
 if ($ZoxideExe) {
     # Only regenerate if cache doesn't exist (eliminates 2 Get-Item calls on normal loads)
     if (-not (Test-Path $ZoxideCache)) {
-        zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
+        & $ZoxideExe init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
     }
 
     if (Test-Path $ZoxideCache) {
@@ -163,7 +163,7 @@ if ($ZoxideExe) {
             . $ZoxideCache
         } catch {
             # Self-healing: regenerate on error
-            zoxide init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
+            & $ZoxideExe init powershell | Out-File -FilePath $ZoxideCache -Encoding utf8 -Force
             . $ZoxideCache
         }
     }

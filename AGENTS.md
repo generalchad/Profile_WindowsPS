@@ -43,7 +43,7 @@ Personal PowerShell 7 profile. For architecture, load order, the load-time budge
 - **Commits:** conventional commits scoped to the module or component (e.g. `feat(Test-UdpPort): …`, `fix(Settings): …`, `perf(profile): …`). Commits must be common-sense and granular:
   - *Atomic and focused:* one logical feature, fix, or optimization per commit. Never bundle unrelated modules, config changes, or refactors into a single catch-all commit.
   - *Common-sense boundaries:* keep a module's implementation, manifest, and its corresponding `.gitignore` whitelist entry together in the same commit so each commit represents a functional, valid state without excessive micro-fragmentation.
-- **Caches:** `omp.cache.ps1`, `zoxide.cache.ps1`, and `pwsh-env.cache.ps1` live in `$env:TEMP`. Delete them to force a rebuild after changing the theme, the tools, or `$env:PATH`.
+- **Caches:** `omp.cache.ps1`, `zoxide.cache.ps1`, and `pwsh-env.cache.ps1` live in `$env:LOCALAPPDATA\PowerShell\ProfileCache` (not `$env:TEMP`: every shell, elevated ones included, dot-sources them). Delete them to force a rebuild after changing the theme, the tools, or `$env:PATH`.
 
 ## 6. Verification
 

@@ -90,7 +90,8 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
   make that write unconditional.
 - **Command lookups go through `Resolve-CachedCommand`.** A `Get-Command` miss
   scans every `$env:PATH` entry (~105 ms each). `Config/CommandCache.ps1` persists
-  hits **and** misses to `$env:TEMP\pwsh-env.cache.ps1`, keyed on a SHA-256 of
+  hits **and** misses to `$env:LOCALAPPDATA\PowerShell\ProfileCache\pwsh-env.cache.ps1`
+  (not `$env:TEMP`, since every shell dot-sources it), keyed on a SHA-256 of
   `$env:PATH`, and regenerates only when `$env:PATH` changes. Returns the absolute
   path, or `$null` on miss. Use it instead of `Get-Command` anywhere in the startup
   path.
