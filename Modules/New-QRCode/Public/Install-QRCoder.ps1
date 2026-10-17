@@ -10,7 +10,9 @@ function Install-QRCoder {
         first time a QR code is generated.
 
     .PARAMETER Version
-        The QRCoder version to install. Defaults to the latest stable release.
+        The QRCoder version to install. Defaults to the pinned release, whose
+        package hash ships with the module. Any other version is verified only
+        against the hash nuget.org publishes for it, and a warning says so.
 
     .PARAMETER Destination
         The folder to install QRCoder.dll into. Defaults to
@@ -58,7 +60,7 @@ function Install-QRCoder {
 
     try {
         if (-not $Version) {
-            $Version = Get-QRCoderLatestVersion
+            $Version = $script:QRCoderPinnedVersion
         }
 
         if (-not $PSCmdlet.ShouldProcess($dllPath, "Download QRCoder $Version from nuget.org")) {

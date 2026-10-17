@@ -4,10 +4,11 @@ function Save-QRCoderLibrary {
         Downloads a QRCoder release and extracts QRCoder.dll into a library folder.
 
     .DESCRIPTION
-        The download core shared by Install-QRCoder and Initialize-QRCoder. It
-        throws on any failure so callers higher in the stack decide how to present
-        it; the repository is never touched because the destination is a local
-        library folder.
+        The download core shared by Install-QRCoder and Initialize-QRCoder. The
+        package's SHA-512 is checked before anything is extracted (see
+        Get-QRCoderPackageHash). It throws on any failure so callers higher in the
+        stack decide how to present it; the repository is never touched because
+        the destination is a local library folder.
 
     .PARAMETER Version
         The QRCoder version to download.
@@ -34,6 +35,12 @@ function Save-QRCoderLibrary {
 
     try {
         Invoke-WebRequest -Uri $nupkgUrl -OutFile $tempNupkg -ErrorAction Stop
+
+        $expectedHash = Get-QRCoderPackageHash -Version $Version
+        $actualHash = (Get-FileHash -LiteralPath $tempNupkg -Algorithm SHA512).Hash
+        if ($actualHash -ne $expectedHash) {
+            throw [System.IO.InvalidDataException]::new("QRCoder $Version failed its SHA512 check (expected $expectedHash, got $actualHash). Nothing was installed.")
+        }
 
         # QRCoder ships per-targetFramework binaries; net6.0 is the newest target
         # and runs on the .NET that PowerShell 7 carries. Fall back for older hosts.

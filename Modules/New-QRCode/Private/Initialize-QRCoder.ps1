@@ -15,7 +15,7 @@ function Initialize-QRCoder {
 
     .PARAMETER Version
         Optional QRCoder version to install when the library is missing. Defaults
-        to the latest stable release.
+        to the pinned release.
 
     .OUTPUTS
         System.String. The full path to the loaded QRCoder.dll.
@@ -40,7 +40,7 @@ function Initialize-QRCoder {
                 "QRCoder.dll was not found in '$libDir'. Run Install-QRCoder to download it, then retry.")
         }
         if ([string]::IsNullOrWhiteSpace($Version)) {
-            $Version = Get-QRCoderLatestVersion
+            $Version = $script:QRCoderPinnedVersion
         }
         $null = Save-QRCoderLibrary -Version $Version -Destination $libDir
     }

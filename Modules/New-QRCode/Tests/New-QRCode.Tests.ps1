@@ -55,12 +55,11 @@ Test-Case 'Manifest exports New-QRCode, Show-QRCode and Install-QRCoder' {
 # Regression: the first-use auto-install used to hand an empty version to the
 # downloader, whose -Version is mandatory. Runs before QRCoder is loaded so
 # Initialize-QRCoder takes the install branch; the download core is stubbed.
-Test-Case 'Auto-install supplies a resolved version to the downloader' {
+Test-Case 'Auto-install supplies the pinned version to the downloader' {
     $module = Get-Module New-QRCode
     $originals = & $module {
         [pscustomobject]@{
             Request = (Get-Item Function:\Request-QRCoderInstall).ScriptBlock
-            Latest  = (Get-Item Function:\Get-QRCoderLatestVersion).ScriptBlock
             Save    = (Get-Item Function:\Save-QRCoderLibrary).ScriptBlock
         }
     }
@@ -70,7 +69,6 @@ Test-Case 'Auto-install supplies a resolved version to the downloader' {
     try {
         & $module {
             Set-Item Function:\Request-QRCoderInstall { $true }
-            Set-Item Function:\Get-QRCoderLatestVersion { '9.9.9' }
             Set-Item Function:\Save-QRCoderLibrary {
                 param(
                     [Parameter(Mandatory)] [string] $Version,
@@ -83,15 +81,39 @@ Test-Case 'Auto-install supplies a resolved version to the downloader' {
 
         try { & $module { Initialize-QRCoder } | Out-Null } catch { }
 
-        (& $module { Get-Variable -Name TestSavedVersion -Scope Script -ValueOnly }) -eq '9.9.9'
+        $saved = & $module { Get-Variable -Name TestSavedVersion -Scope Script -ValueOnly }
+        $saved -eq (& $module { $script:QRCoderPinnedVersion }) -and $saved -match '^\d+\.\d+\.\d+$'
     }
     finally {
         & $module {
             param($o)
             Set-Item Function:\Request-QRCoderInstall $o.Request
-            Set-Item Function:\Get-QRCoderLatestVersion $o.Latest
             Set-Item Function:\Save-QRCoderLibrary $o.Save
         } $originals
+    }
+}
+
+Test-Case 'Pinned QRCoder hash is a 128-character SHA-512 hex string' {
+    (& (Get-Module New-QRCode) { $script:QRCoderPinnedSha512 }) -match '^[0-9A-F]{128}$'
+}
+
+Test-Case 'Download with a mismatched hash throws and installs nothing' {
+    $module = Get-Module New-QRCode
+    $destination = Join-Path $env:TEMP "New-QRCode-test-hash-$([guid]::NewGuid().ToString('N'))"
+    $original = & $module { (Get-Item Function:\Get-QRCoderPackageHash).ScriptBlock }
+    try {
+        $message = & $module {
+            param($dest)
+            Set-Item Function:\Get-QRCoderPackageHash { 'A' * 128 }
+            function Invoke-WebRequest { param($Uri, $OutFile, $ErrorAction) Set-Content -LiteralPath $OutFile -Value 'tampered' }
+            try { Save-QRCoderLibrary -Version $script:QRCoderPinnedVersion -Destination $dest; 'no-throw' }
+            catch { $_.Exception.Message }
+        } $destination
+        $message -like '*failed its SHA512 check*' -and -not (Test-Path -LiteralPath (Join-Path $destination 'QRCoder.dll'))
+    }
+    finally {
+        & $module { param($o) Set-Item Function:\Get-QRCoderPackageHash $o } $original
+        Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 

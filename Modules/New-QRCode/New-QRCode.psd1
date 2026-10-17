@@ -1,6 +1,6 @@
 @{
     RootModule           = 'New-QRCode.psm1'
-    ModuleVersion        = '0.1.0'
+    ModuleVersion        = '0.2.0'
     GUID                 = '55f48fef-0674-4dd2-b302-3dd4b6ae7d51'
     Author               = 'Timothy W. Brown'
     CompanyName          = 'Timothy W. Brown'
@@ -25,13 +25,14 @@
         'Private/ConvertTo-QRCodeText.ps1'
         'Private/Get-QRCodeData.ps1'
         'Private/Get-QRCoderLibDirectory.ps1'
-        'Private/Get-QRCoderLatestVersion.ps1'
+        'Private/Get-QRCoderPackageHash.ps1'
         'Private/Get-QRCodeOutputPath.ps1'
         'Private/Get-QRCodeSlug.ps1'
         'Private/Initialize-QRCoder.ps1'
         'Private/Request-QRCoderInstall.ps1'
         'Private/Save-QRCoderLibrary.ps1'
         'Private/Write-QRCodeConsole.ps1'
+        'Private/_Config.ps1'
         'Tests/New-QRCode.Tests.ps1'
     )
 
