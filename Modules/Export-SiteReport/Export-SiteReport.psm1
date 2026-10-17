@@ -206,6 +206,19 @@ function Export-SiteReport {
     }
 }
 
+function ConvertTo-HtmlText {
+    <#
+    .SYNOPSIS
+        HTML-encodes a value for the report body.
+    .DESCRIPTION
+        Adapter names, DNS PTR names, and SNMP strings (model, serial, supply
+        descriptions) are controlled by whatever device answered, so a rogue host
+        on the subnet could otherwise inject markup or script into the report.
+    #>
+    param([Parameter()][object]$Value)
+    [System.Net.WebUtility]::HtmlEncode([string]$Value)
+}
+
 function ConvertTo-SiteReportHtml {
     <#
     .SYNOPSIS
@@ -279,9 +292,9 @@ function ConvertTo-SiteReportHtml {
         [void]$sb.AppendLine('<table><thead><tr><th>Adapter</th><th>MAC</th><th>IPv4 / Subnet</th><th>DHCP</th><th>Gateway</th><th>Link Speed</th></tr></thead><tbody>')
         foreach ($a in $Report.Network.Adapters) {
             $dhcpBadge = if ($a.DHCPEnabled) { "<span class='badge badge-ok'>DHCP</span>" } else { "<span class='badge badge-warn'>Static</span>" }
-            $ips = ($a.IPv4 -join '<br/>')
-            $gws = ($a.Gateways -join '<br/>')
-            [void]$sb.AppendLine("<tr><td><strong>$($a.Name)</strong><br/><small style='color:#a89984;'>$($a.InterfaceDescription)</small></td><td>$($a.MacAddress)</td><td>$ips</td><td>$dhcpBadge</td><td>$gws</td><td>$($a.LinkSpeed)</td></tr>")
+            $ips = (@($a.IPv4) | ForEach-Object { ConvertTo-HtmlText $_ }) -join '<br/>'
+            $gws = (@($a.Gateways) | ForEach-Object { ConvertTo-HtmlText $_ }) -join '<br/>'
+            [void]$sb.AppendLine("<tr><td><strong>$(ConvertTo-HtmlText $a.Name)</strong><br/><small style='color:#a89984;'>$(ConvertTo-HtmlText $a.InterfaceDescription)</small></td><td>$(ConvertTo-HtmlText $a.MacAddress)</td><td>$ips</td><td>$dhcpBadge</td><td>$gws</td><td>$(ConvertTo-HtmlText $a.LinkSpeed)</td></tr>")
         }
         [void]$sb.AppendLine('</tbody></table>')
     }
@@ -290,11 +303,11 @@ function ConvertTo-SiteReportHtml {
         [void]$sb.AppendLine('<h3>Target Reachability</h3>')
         [void]$sb.AppendLine('<table><thead><tr><th>Target</th><th>Type</th><th>ICMP Status</th><th>ICMP Latency</th><th>TCP 443</th><th>TCP RTT</th></tr></thead><tbody>')
         foreach ($r in $Report.Network.Reachability) {
-            $icmpBadge = if ($r.IcmpStatus -eq 'Reachable') { "<span class='badge badge-ok'>OK</span>" } else { "<span class='badge badge-fail'>$($r.IcmpStatus)</span>" }
-            $tcpBadge  = if ($r.Tcp443 -eq 'Open') { "<span class='badge badge-ok'>OPEN</span>" } else { "<span class='badge badge-fail'>$($r.Tcp443)</span>" }
+            $icmpBadge = if ($r.IcmpStatus -eq 'Reachable') { "<span class='badge badge-ok'>OK</span>" } else { "<span class='badge badge-fail'>$(ConvertTo-HtmlText $r.IcmpStatus)</span>" }
+            $tcpBadge  = if ($r.Tcp443 -eq 'Open') { "<span class='badge badge-ok'>OPEN</span>" } else { "<span class='badge badge-fail'>$(ConvertTo-HtmlText $r.Tcp443)</span>" }
             $iMs = if ($r.IcmpRttMs -ne $null) { "$($r.IcmpRttMs) ms" } else { '&mdash;' }
             $tMs = if ($r.Tcp443Ms -ne $null) { "$($r.Tcp443Ms) ms" } else { '&mdash;' }
-            [void]$sb.AppendLine("<tr><td>$($r.Target)</td><td>$($r.Type)</td><td>$icmpBadge</td><td>$iMs</td><td>$tcpBadge</td><td>$tMs</td></tr>")
+            [void]$sb.AppendLine("<tr><td>$(ConvertTo-HtmlText $r.Target)</td><td>$(ConvertTo-HtmlText $r.Type)</td><td>$icmpBadge</td><td>$iMs</td><td>$tcpBadge</td><td>$tMs</td></tr>")
         }
         [void]$sb.AppendLine('</tbody></table>')
     }
@@ -307,9 +320,9 @@ function ConvertTo-SiteReportHtml {
             $actionBadge = switch ($p.Action) {
                 'Keep'   { "<span class='badge badge-ok'>KEEP</span>" }
                 'Remove' { "<span class='badge badge-fail'>REMOVE</span>" }
-                Default  { "<span class='badge badge-info'>$($p.Action)</span>" }
+                Default  { "<span class='badge badge-info'>$(ConvertTo-HtmlText $p.Action)</span>" }
             }
-            [void]$sb.AppendLine("<tr><td>$($p.Type)</td><td><strong>$([System.Net.WebUtility]::HtmlEncode($p.Name))</strong></td><td>$([System.Net.WebUtility]::HtmlEncode($p.PortName ?? $p.Port ?? '&mdash;'))</td><td>$([System.Net.WebUtility]::HtmlEncode($p.DriverName ?? '&mdash;'))</td><td>$actionBadge<br/><small style='color:#a89984;'>$([System.Net.WebUtility]::HtmlEncode($p.Reason))</small></td></tr>")
+            [void]$sb.AppendLine("<tr><td>$(ConvertTo-HtmlText $p.Type)</td><td><strong>$([System.Net.WebUtility]::HtmlEncode($p.Name))</strong></td><td>$([System.Net.WebUtility]::HtmlEncode($p.PortName ?? $p.Port ?? '&mdash;'))</td><td>$([System.Net.WebUtility]::HtmlEncode($p.DriverName ?? '&mdash;'))</td><td>$actionBadge<br/><small style='color:#a89984;'>$([System.Net.WebUtility]::HtmlEncode($p.Reason))</small></td></tr>")
         }
         [void]$sb.AppendLine('</tbody></table>')
     } else {
@@ -323,11 +336,13 @@ function ConvertTo-SiteReportHtml {
             $suppliesList = @()
             if ($np.Supplies) {
                 foreach ($s in $np.Supplies) {
-                    $suppliesList += "$($s.Name): $($s.Percent)%"
+                    $suppliesList += ConvertTo-HtmlText "$($s.Name): $($s.Percent)%"
                 }
             }
             $suppliesStr = if ($suppliesList.Count -gt 0) { $suppliesList -join '<br/>' } else { '&mdash;' }
-            [void]$sb.AppendLine("<tr><td>$($np.ComputerName ?? $np.IPAddress)</td><td>$([System.Net.WebUtility]::HtmlEncode($np.Model ?? $np.Vendor ?? 'Unknown'))</td><td>$([System.Net.WebUtility]::HtmlEncode($np.Serial ?? '&mdash;'))</td><td>$($np.PageCount ?? '&mdash;')</td><td>$([System.Net.WebUtility]::HtmlEncode($np.Status ?? 'Discovered'))</td><td>$suppliesStr</td></tr>")
+            $serial = if ($np.Serial) { ConvertTo-HtmlText $np.Serial } else { '&mdash;' }
+            $pages = if ($null -ne $np.PageCount) { ConvertTo-HtmlText $np.PageCount } else { '&mdash;' }
+            [void]$sb.AppendLine("<tr><td>$(ConvertTo-HtmlText ($np.ComputerName ?? $np.IPAddress))</td><td>$(ConvertTo-HtmlText ($np.Model ?? $np.Vendor ?? 'Unknown'))</td><td>$serial</td><td>$pages</td><td>$(ConvertTo-HtmlText ($np.Status ?? 'Discovered'))</td><td>$suppliesStr</td></tr>")
         }
         [void]$sb.AppendLine('</tbody></table>')
     }
