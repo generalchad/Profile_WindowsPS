@@ -49,7 +49,11 @@ if ($supportedParams) {
 # never actually being filtered.
 # Tightened regex prevents dropping innocent commands like 'winget search token'
 # or 'ssh-keygen' while catching passwords, connection strings, and key/token assignments.
-$script:SensitiveHistoryPattern = '(?i)(password|secret|apikey|connectionstring|--?[a-z0-9_-]*(?:token|key)\b|(?:key|token)\s*[:=])'
+# Also covers secrets passed without a telltale word: 'net user <name> <pw>' (a
+# trailing /switch alone is kept), ConvertTo-SecureString -AsPlainText, HTTP auth
+# headers, and New-ScanShare's -w password alias. Bare 'pwd' is Get-Location, so it
+# only counts as a secret when assigned or used as a flag.
+$script:SensitiveHistoryPattern = '(?i)(passw|secret|apikey|connectionstring|--?[a-z0-9_-]*(?:token|key)\b|(?:key|token)\s*[:=]|\bpwd\s*[:=]|--?pwd\b|AsPlainText|\bbearer\s|\bauthorization\s*:|\bnet(?:\.exe)?\s+user\s+\S+\s+[^/\s]|\bNew-ScanShare\b.*\s-w\s)'
 try {
     Set-PSReadLineOption -AddToHistoryHandler {
         param($Line)

@@ -98,7 +98,10 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
   the prediction keys when output is redirected and is isolated in its own
   `try/catch`, so a redirected host cannot abort `Settings.ps1`.
 - **History secret filter.** `AddToHistoryHandler` returns `$false` for commands
-  matching `password|secret|key|apikey|token|connectionstring`.
+  that look like they carry a secret: `passw`/`secret`/`apikey`/`connectionstring`,
+  key/token flags and assignments, `net user <name> <pw>`, `-AsPlainText`, HTTP
+  `Bearer`/`Authorization:` headers, and `New-ScanShare … -w`. The pattern lives in
+  `Config/Settings.ps1`.
 - **Terminal-Icons is not imported** — measurable startup cost for non-essential
   icons. Opt in with `Import-Module Terminal-Icons`.
 
