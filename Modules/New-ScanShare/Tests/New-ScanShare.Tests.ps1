@@ -177,7 +177,8 @@ Test-Case 'Rejects filesystem drive root with terminating error' {
 }
 
 Test-Case 'Relative path resolves against current PowerShell location' {
-    Push-Location $env:TEMP
+    # TEMP sits under AppData, which the protected-path guard refuses.
+    Push-Location "$env:SystemDrive\"
     try {
         $expected = Join-Path (Get-Location).Path 'ScansTest'
         $res = New-ScanShare -Path '.\ScansTest' -WhatIf
@@ -198,7 +199,7 @@ Test-Case '-WhatIf returns PSCustomObject with complete schema' {
 }
 
 Test-Case '-WhatIf does not mutate file system or share state' {
-    $testFolder = Join-Path $env:TEMP "TestScanShare_$(Get-Random)"
+    $testFolder = Join-Path "$env:SystemDrive\" "TestScanShare_$(Get-Random)"
     $null = New-ScanShare -Path $testFolder -ShareName "TempShare$(Get-Random)" -WhatIf
     -not (Test-Path -LiteralPath $testFolder)
 }
@@ -378,6 +379,39 @@ Test-Case 'Firewall candidates correlate by InstanceID when Name differs' {
 
     @($candidates).Count -eq 1 -and
     $candidates[0].InstanceID -eq 'GUID-123'
+}
+
+# 6b. Protected Path Guard
+$protectedCases = @(
+    @{ Path = 'C:\Windows'; Allowed = $false },
+    @{ Path = 'C:\Windows\Temp\Scans'; Allowed = $false },
+    @{ Path = 'C:\Program Files\Scans'; Allowed = $false },
+    @{ Path = 'C:\ProgramData\Scans'; Allowed = $false },
+    @{ Path = 'C:\Users'; Allowed = $false },
+    @{ Path = 'C:\Users\alice'; Allowed = $false },
+    @{ Path = 'C:\Users\alice\Documents'; Allowed = $false },
+    @{ Path = 'C:\Users\alice\AppData\Local\Scans'; Allowed = $false },
+    @{ Path = 'C:\Users\alice\Documents\Scans'; Allowed = $true },
+    @{ Path = 'C:\Scans'; Allowed = $true },
+    @{ Path = 'D:\Data\Scans\Xerox'; Allowed = $true },
+    @{ Path = 'C:\WindowsScans'; Allowed = $true }
+)
+foreach ($case in $protectedCases) {
+    Test-Case "Path guard: '$($case.Path)' allowed=$($case.Allowed)" {
+        $mod = Get-Module New-ScanShare
+        $reason = & $mod.NewBoundScriptBlock({
+            param($p)
+            Get-ScanSharePathRestriction -Path $p -SystemRoot 'C:\Windows', 'C:\Program Files', 'C:\ProgramData' -ProfilesRoot 'C:\Users'
+        }) $case.Path
+        ([string]::IsNullOrEmpty($reason)) -eq $case.Allowed
+    }
+}
+
+Test-Case 'New-ScanShare refuses a protected folder even under -WhatIf' {
+    $errorId = $null
+    try { $null = New-ScanShare -Path $env:windir -WhatIf }
+    catch { $errorId = $_.FullyQualifiedErrorId }
+    $errorId -like 'ProtectedPathNotAllowed*'
 }
 
 # 7. NTFS Lockdown Planning

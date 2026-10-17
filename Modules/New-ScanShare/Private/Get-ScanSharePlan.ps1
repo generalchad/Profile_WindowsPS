@@ -108,7 +108,11 @@ function Get-ScanSharePlan {
     # Folder
     $folderExists = [bool](Test-Path -LiteralPath $Path -PathType Container)
     if ($folderExists) {
-        $items.Add([pscustomobject]@{ Step = 'Folder'; Description = "No change ($Path already exists)" })
+        $hasContent = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue | Select-Object -First 1).Count -gt 0
+        $folderDesc = if ($hasContent) {
+            "No change ($Path already exists and is NOT empty: its contents become readable and writable by $Account)"
+        } else { "No change ($Path already exists)" }
+        $items.Add([pscustomobject]@{ Step = 'Folder'; Description = $folderDesc })
     }
     else {
         $items.Add([pscustomobject]@{ Step = 'Folder'; Description = "Create $Path" })

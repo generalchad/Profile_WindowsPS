@@ -184,6 +184,17 @@ function New-ScanShare {
 
     $Path = $resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 
+    $pathRestriction = Get-ScanSharePathRestriction -Path $Path
+    if ($pathRestriction) {
+        $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+            [System.ArgumentException]::new("$pathRestriction New-ScanShare locks down and shares the folder, so it requires a dedicated scan folder (e.g. 'C:\Scans')."),
+            'ProtectedPathNotAllowed',
+            [System.Management.Automation.ErrorCategory]::InvalidArgument,
+            $Path
+        )
+        $PSCmdlet.ThrowTerminatingError($errorRecord)
+    }
+
     if (-not (Get-Command Get-LocalUser -ErrorAction SilentlyContinue) -or
         -not (Get-Command Get-SmbShare -ErrorAction SilentlyContinue)) {
         $errorRecord = [System.Management.Automation.ErrorRecord]::new(
@@ -334,7 +345,9 @@ function New-ScanShare {
     # ---- 3. Folder ----------------------------------------------------------
     try {
         if (Test-Path -LiteralPath $Path -PathType Container) {
-            & $addStep 'Folder' 'Exists' $Path
+            $hasContent = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue | Select-Object -First 1).Count -gt 0
+            $folderDetail = if ($hasContent) { "$Path (not empty: its existing contents become readable and writable by $account)" } else { $Path }
+            & $addStep 'Folder' 'Exists' $folderDetail
         }
         elseif ($PSCmdlet.ShouldProcess($Path, 'Create folder')) {
             $null = New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop
