@@ -55,6 +55,8 @@ function Update-VsCode {
             if (Get-Process -Name "Code - Insiders" -ErrorAction SilentlyContinue) {
                 Write-Warning "VS Code Insiders is currently open. Extensions will update, but a reload may be required."
             }
+            Write-Host "Checking for updates to Help docs..." -ForegroundColor Cyan
+            Update-Help -Force -ErrorAction SilentlyContinue
             Write-Host "Checking for VS Code Insiders extension updates..." -ForegroundColor Cyan
             Invoke-VsCodeExtensionUpdate -Executable $insidersCmd.Source
         } elseif ($Insiders) {
