@@ -39,8 +39,9 @@ function New-ScanShare {
         Password for the account, as a SecureString or a plain string (converted
         internally). Prompted for when a new account is created and none is
         supplied. Ignored for an existing account unless -ResetPassword is given.
-        A plain string is visible in the process list, so prefer a SecureString
-        for anything sensitive. Alias: -w. Position 3.
+        A plain string lands in the process list and the console history, so prefer
+        the prompt or a SecureString. Alias: -w. Named only: it is deliberately not
+        positional so a password is never typed as a bare trailing argument.
 
     .PARAMETER ResetPassword
         Set -Password on an account that already exists. Alias: -rp.
@@ -76,12 +77,13 @@ function New-ScanShare {
         prompting for the password.
 
     .EXAMPLE
-        New-ScanShare D:\Scans\Xerox XeroxScans xerox 'Example-Pass1!'
+        New-ScanShare D:\Scans\Xerox XeroxScans xerox
 
-        Positional shorthand: path, share name, user name, then password.
+        Positional shorthand: path, share name, then user name. The password is
+        prompted for so it never reaches the console history.
 
     .EXAMPLE
-        New-ScanShare -p D:\Scans\Xerox -n XeroxScans -u xerox -w 'Example-Pass1!'
+        New-ScanShare -p D:\Scans\Xerox -n XeroxScans -u xerox -w (Read-Host -AsSecureString)
 
         Same as the positional form, using the short parameter aliases.
 
@@ -143,7 +145,7 @@ function New-ScanShare {
         [ValidatePattern('^[^\\/"\[\]:|<>+=;,?*@]{1,20}$')]
         [string]$UserName = 'scanner',
 
-        [Parameter(Position = 3)]
+        [Parameter()]
         [Alias('w')]
         [object]$Password,
 

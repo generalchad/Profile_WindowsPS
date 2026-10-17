@@ -124,7 +124,7 @@ Test-Case 'Defines short parameter aliases' {
     $cmd.Parameters['SkipVerification'].Aliases -contains 'sv'
 }
 
-Test-Case 'Defines positional order for Path, ShareName, UserName, Password' {
+Test-Case 'Defines positional order for Path, ShareName, UserName; Password is named only' {
     $cmd = Get-Command New-ScanShare
     $position = @{}
     foreach ($name in 'Path', 'ShareName', 'UserName', 'Password') {
@@ -134,10 +134,17 @@ Test-Case 'Defines positional order for Path, ShareName, UserName, Password' {
     $position['Path'] -eq 0 -and
     $position['ShareName'] -eq 1 -and
     $position['UserName'] -eq 2 -and
-    $position['Password'] -eq 3
+    $position['Password'] -eq [int]::MinValue
 }
 
-Test-Case 'Binds positionally: path share user password' {
+Test-Case 'Rejects a positional password' {
+    $threw = $false
+    try { $null = New-ScanShare 'C:\Scans' 'XeroxScans' 'xerox' 'NotAPassword1!' -WhatIf }
+    catch { $threw = $_.FullyQualifiedErrorId -like 'PositionalParameterNotFound*' }
+    $threw
+}
+
+Test-Case 'Binds positionally: path share user' {
     $res = New-ScanShare 'C:\Scans' 'XeroxScans' 'xerox' -WhatIf
     $res.UncPath -eq "\\$env:COMPUTERNAME\XeroxScans" -and
     $res.Account -eq "$env:COMPUTERNAME\xerox" -and

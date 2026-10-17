@@ -1,6 +1,6 @@
 @{
     RootModule           = 'New-ScanShare.psm1'
-    ModuleVersion        = '0.3.0'
+    ModuleVersion        = '0.4.0'
     GUID                 = 'b735b035-cf82-4c2a-a47e-13783d33079e'
     Author               = 'Timothy W. Brown'
     CompanyName          = 'Timothy W. Brown'
