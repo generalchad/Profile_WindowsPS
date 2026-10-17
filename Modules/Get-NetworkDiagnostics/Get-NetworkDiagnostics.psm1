@@ -473,6 +473,19 @@ function Get-NetworkDiagnostics {
     }
 }
 
+function ConvertTo-HtmlText {
+    <#
+    .SYNOPSIS
+        HTML-encodes a value for the report body.
+    .DESCRIPTION
+        Adapter descriptions, DNS answers, and probe targets come from the network
+        or local configuration, so a hostile value could otherwise inject markup or
+        script into a report that is opened in a browser.
+    #>
+    param([Parameter()][object]$Value)
+    [System.Net.WebUtility]::HtmlEncode([string]$Value)
+}
+
 function ConvertTo-NetworkDiagnosticsHtml {
     <#
     .SYNOPSIS
@@ -504,7 +517,7 @@ function ConvertTo-NetworkDiagnosticsHtml {
     [void]$sb.AppendLine('</head>')
     [void]$sb.AppendLine('<body>')
 
-    [void]$sb.AppendLine("<h1>Network Diagnostics Report &mdash; $($Report.ComputerName)</h1>")
+    [void]$sb.AppendLine("<h1>Network Diagnostics Report &mdash; $(ConvertTo-HtmlText $Report.ComputerName)</h1>")
     [void]$sb.AppendLine("<p style='color: #a89984;'>Generated at $($Report.Timestamp.ToString('yyyy-MM-dd HH:mm:ss UTC'))</p>")
 
     # Cards Grid
@@ -521,10 +534,10 @@ function ConvertTo-NetworkDiagnosticsHtml {
     [void]$sb.AppendLine('<table><thead><tr><th>Name</th><th>MAC</th><th>IPv4 / Subnet</th><th>DHCP</th><th>Lease Expires</th><th>Speed</th><th>Gateway</th></tr></thead><tbody>')
     foreach ($a in $Report.Adapters) {
         $dhcpBadge = if ($a.DHCPEnabled) { "<span class='badge badge-ok'>DHCP</span>" } else { "<span class='badge badge-warn'>Static</span>" }
-        $ips = ($a.IPv4 -join '<br/>')
-        $gws = ($a.Gateways -join '<br/>')
+        $ips = (@($a.IPv4) | ForEach-Object { ConvertTo-HtmlText $_ }) -join '<br/>'
+        $gws = (@($a.Gateways) | ForEach-Object { ConvertTo-HtmlText $_ }) -join '<br/>'
         $lease = if ($a.LeaseExpires) { $a.LeaseExpires.ToString('yyyy-MM-dd HH:mm') } else { '&mdash;' }
-        [void]$sb.AppendLine("<tr><td><strong>$($a.Name)</strong><br/><small style='color:#a89984;'>$($a.InterfaceDescription)</small></td><td>$($a.MacAddress)</td><td>$ips</td><td>$dhcpBadge</td><td>$lease</td><td>$($a.LinkSpeed)</td><td>$gws</td></tr>")
+        [void]$sb.AppendLine("<tr><td><strong>$(ConvertTo-HtmlText $a.Name)</strong><br/><small style='color:#a89984;'>$(ConvertTo-HtmlText $a.InterfaceDescription)</small></td><td>$(ConvertTo-HtmlText $a.MacAddress)</td><td>$ips</td><td>$dhcpBadge</td><td>$lease</td><td>$(ConvertTo-HtmlText $a.LinkSpeed)</td><td>$gws</td></tr>")
     }
     [void]$sb.AppendLine('</tbody></table>')
 
@@ -532,11 +545,11 @@ function ConvertTo-NetworkDiagnosticsHtml {
     [void]$sb.AppendLine('<h2>Target Reachability</h2>')
     [void]$sb.AppendLine('<table><thead><tr><th>Target</th><th>Type</th><th>ICMP Ping</th><th>Latency</th><th>TCP 443 (HTTPS)</th><th>TCP RTT</th></tr></thead><tbody>')
     foreach ($r in $Report.Reachability) {
-        $icmpBadge = if ($r.IcmpStatus -eq 'Reachable') { "<span class='badge badge-ok'>OK</span>" } else { "<span class='badge badge-fail'>$($r.IcmpStatus)</span>" }
-        $tcpBadge  = if ($r.Tcp443 -eq 'Open') { "<span class='badge badge-ok'>OPEN</span>" } else { "<span class='badge badge-fail'>$($r.Tcp443)</span>" }
+        $icmpBadge = if ($r.IcmpStatus -eq 'Reachable') { "<span class='badge badge-ok'>OK</span>" } else { "<span class='badge badge-fail'>$(ConvertTo-HtmlText $r.IcmpStatus)</span>" }
+        $tcpBadge  = if ($r.Tcp443 -eq 'Open') { "<span class='badge badge-ok'>OPEN</span>" } else { "<span class='badge badge-fail'>$(ConvertTo-HtmlText $r.Tcp443)</span>" }
         $icmpMs = if ($r.IcmpRttMs -ne $null) { "$($r.IcmpRttMs) ms" } else { '&mdash;' }
         $tcpMs  = if ($r.Tcp443Ms -ne $null) { "$($r.Tcp443Ms) ms" } else { '&mdash;' }
-        [void]$sb.AppendLine("<tr><td><strong>$($r.Target)</strong></td><td>$($r.Type)</td><td>$icmpBadge</td><td>$icmpMs</td><td>$tcpBadge</td><td>$tcpMs</td></tr>")
+        [void]$sb.AppendLine("<tr><td><strong>$(ConvertTo-HtmlText $r.Target)</strong></td><td>$(ConvertTo-HtmlText $r.Type)</td><td>$icmpBadge</td><td>$icmpMs</td><td>$tcpBadge</td><td>$tcpMs</td></tr>")
     }
     [void]$sb.AppendLine('</tbody></table>')
 
@@ -544,9 +557,9 @@ function ConvertTo-NetworkDiagnosticsHtml {
     [void]$sb.AppendLine('<h2>DNS Resolution Validation</h2>')
     [void]$sb.AppendLine('<table><thead><tr><th>DNS Server</th><th>Domain Tested</th><th>Status</th><th>Resolved IPs</th><th>Latency</th></tr></thead><tbody>')
     foreach ($d in $Report.DnsValidation) {
-        $badge = if ($d.Status -eq 'Success') { "<span class='badge badge-ok'>RESOLVED</span>" } else { "<span class='badge badge-fail'>$($d.Status)</span>" }
-        $ips = ($d.ResolvedIPs -join ', ')
-        [void]$sb.AppendLine("<tr><td>$($d.Server)</td><td>$($d.Domain)</td><td>$badge</td><td>$ips</td><td>$($d.LatencyMs) ms</td></tr>")
+        $badge = if ($d.Status -eq 'Success') { "<span class='badge badge-ok'>RESOLVED</span>" } else { "<span class='badge badge-fail'>$(ConvertTo-HtmlText $d.Status)</span>" }
+        $ips = ConvertTo-HtmlText ($d.ResolvedIPs -join ', ')
+        [void]$sb.AppendLine("<tr><td>$(ConvertTo-HtmlText $d.Server)</td><td>$(ConvertTo-HtmlText $d.Domain)</td><td>$badge</td><td>$ips</td><td>$($d.LatencyMs) ms</td></tr>")
     }
     [void]$sb.AppendLine('</tbody></table>')
 
@@ -555,7 +568,7 @@ function ConvertTo-NetworkDiagnosticsHtml {
         [void]$sb.AppendLine("<h2>Hosts File Overrides ($($Report.HostsOverrides.Count))</h2>")
         [void]$sb.AppendLine('<table><thead><tr><th>IP Address</th><th>Hostnames</th></tr></thead><tbody>')
         foreach ($h in $Report.HostsOverrides) {
-            [void]$sb.AppendLine("<tr><td>$($h.IPAddress)</td><td>$([System.Net.WebUtility]::HtmlEncode($h.Hostnames))</td></tr>")
+            [void]$sb.AppendLine("<tr><td>$(ConvertTo-HtmlText $h.IPAddress)</td><td>$([System.Net.WebUtility]::HtmlEncode($h.Hostnames))</td></tr>")
         }
         [void]$sb.AppendLine('</tbody></table>')
     }
