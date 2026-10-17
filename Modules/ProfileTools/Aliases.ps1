@@ -138,7 +138,7 @@ function flushdns { Clear-DnsClientCache }
 .SYNOPSIS
     Returns the machine's public IP address.
 #>
-function Get-PublicIP { (Invoke-WebRequest http://ifconfig.me/ip).Content }
+function Get-PublicIP { (Invoke-WebRequest https://ifconfig.me/ip).Content }
 
 <#
 .SYNOPSIS

@@ -160,12 +160,16 @@ function New-Hastebin {
     .SYNOPSIS
         Uploads a file's contents to a hastebin service and returns the URL.
     .DESCRIPTION
-        POSTs the file body to the paste service. Network failures are reported
-        as non-terminating errors rather than thrown.
+        POSTs the file body to the paste service over HTTPS. The paste is public
+        to anyone holding the URL, so the upload asks for confirmation first
+        (ConfirmImpact High); pass -Confirm:$false to skip the prompt. Network
+        failures are reported as non-terminating errors rather than thrown.
     .PARAMETER FilePath
         Path to the file to upload. Accepts pipeline input.
+    .OUTPUTS
+        System.String. The paste URL.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     Param(
         [Parameter(Mandatory, ValueFromPipeline)]
         [string]$FilePath
@@ -174,13 +178,12 @@ function New-Hastebin {
         Write-Error "File path does not exist." -ErrorAction Continue
         return
     }
+    $pasteHost = 'https://bin.christitus.com'
+    if (-not $PSCmdlet.ShouldProcess("$FilePath -> $pasteHost", 'Upload as a public paste')) { return }
     $Content = Get-Content $FilePath -Raw
-    $uri = "http://bin.christitus.com/documents"
     try {
-        $response = Invoke-RestMethod -Uri $uri -Method Post -Body $Content -ErrorAction Stop
-        $hasteKey = $response.key
-        $url = "http://bin.christitus.com/$hasteKey"
-        Write-Output $url
+        $response = Invoke-RestMethod -Uri "$pasteHost/documents" -Method Post -Body $Content -ErrorAction Stop
+        Write-Output "$pasteHost/$($response.key)"
     }
     catch {
         Write-Error "New-Hastebin: An unexpected error occurred: $($_.Exception.Message)" -ErrorAction Continue
