@@ -90,7 +90,7 @@ if ($ProfileTrace) { Mark 'Aliases' }
 # for icons that aren't essential. Opt in with `Import-Module Terminal-Icons`.
 
 # Oh-My-Posh (Optimized Caching - Regenerate if cache missing or stale)
-$OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\easy-term.omp.json"
+$OmpTheme = Join-Path $HOME "Documents\PowerShell\Themes\amro.omp.json"
 $OmpCache = Join-Path $ProfileCacheDirectory "omp.cache.ps1"
 $OmpExe   = Resolve-CachedCommand 'oh-my-posh'
 
