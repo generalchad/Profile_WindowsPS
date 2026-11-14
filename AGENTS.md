@@ -49,7 +49,7 @@ Personal PowerShell 7 profile. For architecture, load order, the load-time budge
 
 - **Parse:** `$t = $e = $null; [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$t, [ref]$e); $e`
 - **Load:** `Import-Module .\Modules\<Name>\<Name>.psd1 -Force`
-- **Startup cost** (after touching the loader or `Config/`): `Measure-ProfileLoad`, or `$env:PROFILE_TRACE=1; pwsh -NoLogo -Command exit` and read `$env:TEMP\pwsh-profile-trace.log`.
+- **Startup cost** (after touching the loader or `Config/`): `Measure-ProfileLoad`, or `$env:PROFILE_TRACE=1; pwsh -NoLogo -Command exit` and read `$env:TEMP\pwsh-profile-trace.log`. Neither sees a cost paid only after a shell with a different `$env:PATH` has run; also run the PATH-flip check in `CONTEXT.md` → Tooling.
 - **Restart-PrintStack:** `pwsh -NoProfile -File .\Modules\Restart-PrintStack\Tests\Plan.Probe.ps1` (read-only).
 
 ## 7. Reference contrasts

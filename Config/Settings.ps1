@@ -79,14 +79,23 @@ if (-not $script:foundEditor) {
 }
 $env:EDITOR = if ($script:foundEditor) { $script:foundEditor } else { 'notepad' }
 
-# Persist to the User scope ONLY when the stored value is actually stale.
+# Persist to the User scope ONLY to establish a value or to repair a dead one.
 #
 # PERF: a User/Machine-scope SetEnvironmentVariable writes HKCU\Environment and
 # then broadcasts WM_SETTINGCHANGE to every top-level window, waiting on each one.
-# Measured on this machine at ~7,100 ms - it was single-handedly responsible for
-# ~84% of profile load time, on every shell, to rewrite a value that never changed.
-# The guarding read costs ~25 ms.
-if ([System.Environment]::GetEnvironmentVariable('EDITOR', 'User') -ne $env:EDITOR) {
+# Measured on this machine at 2,500-7,100 ms per write.
+#
+# "Differs from this session's pick" is NOT a safe trigger. Shells do not all
+# inherit the same PATH (a long-lived parent keeps the one it started with), so one
+# finds the editor on PATH and stores its bare name while another reaches it only
+# through the install-path fallback and stores the full path. Each would overwrite
+# the other and pay the broadcast on every launch. A persisted value that still
+# resolves is left alone, whichever shell wrote it.
+$persistedEditor = [System.Environment]::GetEnvironmentVariable('EDITOR', 'User')
+$persistedEditorIsUsable = $persistedEditor -eq $env:EDITOR -or
+    ($persistedEditor -and
+        ((Resolve-CachedCommand $persistedEditor) -or [System.IO.File]::Exists($persistedEditor)))
+if (-not $persistedEditorIsUsable) {
     [System.Environment]::SetEnvironmentVariable('EDITOR', $env:EDITOR, 'User')
 }
 

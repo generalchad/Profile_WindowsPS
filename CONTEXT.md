@@ -67,34 +67,68 @@ be edited as repo code: `7Zip4Powershell` and `Microsoft.PowerToys.Configure`.
 
 ## Load-time budget
 
-Measured with `Measure-ProfileLoad` (10 cold starts, real console) in August 2026.
-Engine baseline (`-NoProfile`) is ~280 ms on this machine.
+Measured in November 2026: real console, warm disk cache, 65-entry `$env:PATH`.
 
 | Stage          | ~ms | Notes |
 |----------------|-----|-------|
-| Config         | 240 | PSReadLine ~160, editor cache, completers |
-| oh-my-posh     | 188 | prompt init |
-| Aliases        | 37  | eager dynamic aliases only |
-| zoxide         | 16  | |
+| Config         | 245 | PSReadLine import and options ~145, command cache read ~30 |
+| oh-my-posh     | 200 | ~95 of it is one synchronous `oh-my-posh print secondary` spawn |
+| Aliases        | 42  | eager dynamic aliases only |
+| zoxide         | 14  | |
 | PSModulePath   | 14  | |
-| **TOTAL**      | ~500 | in-profile; +~280 engine = ~780 total |
+| **TOTAL**      | ~515 | in-profile, as reported by `$env:PROFILE_TRACE` |
+
+The stage trace stops before the first prompt is drawn, so it is not what a
+person waits for. End to end:
+
+| Launch | ~ms |
+|--------|-----|
+| `pwsh -NoProfile -Command exit` (engine floor) | 285 |
+| `pwsh -Command exit` (what `Measure-ProfileLoad` reports) | 890 |
+| Interactive, to a usable prompt, `-NoProfile` | 480 |
+| Interactive, to a usable prompt, in `$HOME` | 1,050 |
+| Interactive, to a usable prompt, inside a git repo | 1,250 |
+
+The first prompt render is one more `oh-my-posh` spawn: ~140 ms, or ~325 ms where
+the git segment has a repository to inspect.
 
 ## Design notes
 
 - **Approved verbs only.** Exported commands use PowerShell-approved verbs from
   `Get-Verb` (never invented verbs). See the rule in `AGENTS.md`.
-- **The `EDITOR` write is guarded.** A User/Machine-scope
-  `[Environment]::SetEnvironmentVariable` broadcasts `WM_SETTINGCHANGE` to every
-  top-level window and blocks on each — it once cost ~7 s per launch.
-  `Config/Settings.ps1` only writes when the stored value actually differs. Do not
-  make that write unconditional.
+- **Shells do not share one `$env:PATH`.** A process keeps the PATH its parent
+  had when it started, so Windows Terminal, VS Code, and agent CLIs each hand
+  pwsh a different snapshot; some of them run `pwsh -Command …` without
+  `-NoProfile` for every command. Anything the profile derives from PATH is
+  therefore recomputed differently by alternating shells. Startup state keyed on
+  PATH must be cheap to rebuild, and persistent state must not be rewritten just
+  because two shells disagree. Both rules below exist because breaking them cost
+  3.6 s on every launch that followed a shell with a different PATH.
+- **The `EDITOR` write is guarded by "still resolves", not "is equal".** A
+  User/Machine-scope `[Environment]::SetEnvironmentVariable` broadcasts
+  `WM_SETTINGCHANGE` to every top-level window and blocks on each: 2.5–7 s per
+  write. A shell that finds the editor on PATH picks its bare name; one that
+  reaches it through the install-path fallback picks the full path. Comparing the
+  persisted value with the session's pick makes those two overwrite each other
+  forever. `Config/Settings.ps1` writes only when the persisted value is unset or
+  no longer resolves. Consequence: the persisted value does not follow a newly
+  installed higher-priority editor (`$env:EDITOR` in each session still does). To
+  re-pick it, run `[Environment]::SetEnvironmentVariable('EDITOR', $null, 'User')`
+  and open a shell.
 - **Command lookups go through `Resolve-CachedCommand`.** A `Get-Command` miss
-  scans every `$env:PATH` entry (~105 ms each). `Config/CommandCache.ps1` persists
-  hits **and** misses to `$env:LOCALAPPDATA\PowerShell\ProfileCache\pwsh-env.cache.ps1`
-  (not `$env:TEMP`, since every shell dot-sources it), keyed on a SHA-256 of
-  `$env:PATH`, and regenerates only when `$env:PATH` changes. Returns the absolute
-  path, or `$null` on miss. Use it instead of `Get-Command` anywhere in the startup
-  path.
+  costs ~105 ms (PATH scan plus module auto-discovery). `Config/CommandCache.ps1`
+  persists hits **and** misses to
+  `$env:LOCALAPPDATA\PowerShell\ProfileCache\pwsh-env.cache.ps1` (not `$env:TEMP`,
+  since every shell dot-sources it), keyed on a SHA-256 of `$env:PATH` and
+  `$env:PATHEXT`. Returns the absolute path, or `$null` on miss. Use it instead of
+  `Get-Command` anywhere in the startup path. Only the names listed in
+  `$script:PwshEnvCommandNames` are resolved; any other name returns `$null`.
+- **Cache regeneration is on the hot path.** The cache is a single slot, so shells
+  with different PATH snapshots evict each other. `Find-PathApplication` rebuilds
+  it with one directory listing per PATH entry (~25 ms, ~100 ms in a cold shell)
+  and matches `Get-Command`'s precedence: PATH order, then `$env:PATHEXT` order,
+  then the bare name. Never route regeneration back through `Get-Command` (~1.1 s
+  for the 13 names).
 - **PSReadLine prediction needs a real VT console.** `Set-PSReadLineOption` drops
   the prediction keys when output is redirected and is isolated in its own
   `try/catch`, so a redirected host cannot abort `Settings.ps1`.
@@ -112,6 +146,18 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
   profile) with optional per-stage breakdown.
 - `$env:PROFILE_TRACE=1` before launching `pwsh` writes a per-stage breakdown to
   `$env:TEMP\pwsh-profile-trace.log`.
+- **Both tools have two blind spots.** They launch `pwsh -Command exit`, which
+  never draws a prompt, and they launch the same environment repeatedly (with a
+  discarded warm-up), which hides any cost paid only on the first launch after a
+  shell with a different PATH. Check that case explicitly; `Config` should stay
+  near 350 ms:
+
+  ```powershell
+  $p = $env:PATH; $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine')
+  pwsh -NoLogo -Command exit; $env:PATH = $p
+  $env:PROFILE_TRACE = 1; pwsh -NoLogo -Command exit; $env:PROFILE_TRACE = $null
+  ```
+
 - `Modules/New-ScanShare/Deploy/New-ScanSharePackage.ps1` builds
   `Dist\New-ScanShare-Portable-<version>.zip`: a double-click bundle whose
   `Install-ScanShare.cmd` installs `New-ScanShare`/`Show-ScanShare` per-user for
@@ -121,6 +167,12 @@ Engine baseline (`-NoProfile`) is ~280 ms on this machine.
 ## Remaining work
 
 - The profile optimizations (dynamic POSH_SESSION_ID per shell, theme/binary timestamp cache invalidation, OMP_ASYNC trampoline support, and tightened history filter regex) are resolved. Module standardization work is tracked in `ROADMAP.md` rather than here.
+- oh-my-posh is now the largest remaining cost (~200 ms init plus the first
+  prompt). Its generated init runs `oh-my-posh print secondary` synchronously on
+  every launch (~95 ms) for a value that only changes with the theme or the
+  binary, which the `omp.cache.ps1` key already tracks.
+- Non-interactive hosts (`pwsh -Command …` from agent CLIs and scripts) pay the
+  full profile, prompt init included, for a prompt they never draw.
 
 ## Environment notes
 
