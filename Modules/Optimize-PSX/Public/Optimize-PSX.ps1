@@ -3,11 +3,18 @@ function Optimize-PSX {
     .SYNOPSIS
         Extracts disc image archives and compresses the images into CHD files.
     .DESCRIPTION
-        Processes a folder of disc images in three phases:
+        Processes folders, archives or individual disc images in three phases:
 
           1. Extraction  archives are expanded into sibling folders
           2. Conversion   images are compressed to CHD with chdman
           3. Cleanup      sources of verified conversions are removed on request
+
+        Targets may be mixed freely in one run. A folder is walked recursively;
+        an archive is expanded and its contents treated as a folder; a disc
+        image is converted on its own. Track files are resolved to the sheet
+        that describes the disc, since compressing a payload in isolation would
+        drop the remaining tracks. A track file with no sheet beside it cannot
+        be converted and is reported instead.
 
         Conversions run as several concurrent chdman processes sized from a CPU
         budget, with each process given its own worker thread count. On
@@ -26,7 +33,17 @@ function Optimize-PSX {
         Requires chdman from the MAME tools. 7Zip4PowerShell is required for
         archives other than .zip.
     .PARAMETER Path
-        Folder to process. Defaults to the current location.
+        One or more targets: a folder, an archive, or a disc image
+
+          Folder    walked recursively for archives and images
+          Archive   expanded into a sibling folder, then converted
+          Image     .cue/.gdi/.ccd converted with its tracks, or a stand-alone
+                    .iso converted directly
+
+        A track file (.bin/.img and friends) is resolved to the sheet that
+        describes it, either by base name or by being referenced by exactly one
+        sheet in the same folder. A .chd target is ignored as already converted.
+        Defaults to the current location.
     .PARAMETER SkipExtraction
         Do not expand archives; convert existing images only.
     .PARAMETER SkipConversion
@@ -75,6 +92,16 @@ function Optimize-PSX {
         Extracts, converts at a higher CPU budget, then recycles the sources of
         verified conversions.
     .EXAMPLE
+        Optimize-PSX -Path 'D:\Games\Ridge Racer.cue' -RemoveImages
+
+        Converts one disc image, then recycles the sheet and its track files
+        once the CHD is verified.
+    .EXAMPLE
+        Get-ChildItem -Path 'D:\Downloads\*.7z' | Optimize-PSX -RemoveArchives
+
+        Extracts each archive in turn, converts what it contained, then removes
+        the archive.
+    .EXAMPLE
         Optimize-PSX -Path 'D:\Games\PS2' -Compression cdlz,cdzl,cdfl -ThreadsPerJob 4 -WhatIf
 
         Shows the plan, including per-image chdman command selection, without
@@ -87,7 +114,7 @@ function Optimize-PSX {
     param (
         [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [Alias('FullName', 'PSPath')]
-        [string]$Path = $PWD.ProviderPath,
+        [string[]]$Path = $PWD.ProviderPath,
 
         [switch]$SkipExtraction,
 
@@ -163,39 +190,78 @@ function Optimize-PSX {
             $versionText = if ($chdman.Version) { "v$($chdman.Version)" } else { 'version unknown' }
             Write-OpsxLog "Using chdman $versionText at $($chdman.Path)" -Level Detail
         }
+
+        $startTime = [datetime]::Now
+        $targets = [System.Collections.Generic.List[pscustomobject]]::new()
     }
 
     process {
-        $startTime = [datetime]::Now
+        foreach ($item in $Path) {
+            $target = Resolve-OpsxTarget -Path $item
 
-        try {
-            $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).ProviderPath
-        } catch {
-            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
-                [System.Management.Automation.ItemNotFoundException]::new("Path not found: '$Path'."),
-                'PathNotFound',
-                [System.Management.Automation.ErrorCategory]::ObjectNotFound,
-                $Path
-            )
-            $PSCmdlet.ThrowTerminatingError($errorRecord)
-            return
-        }
+            if ($target.Status -eq 'NotFound') {
+                $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    [System.Management.Automation.ItemNotFoundException]::new($target.Message),
+                    'PathNotFound',
+                    [System.Management.Automation.ErrorCategory]::ObjectNotFound,
+                    $item
+                )
+                $PSCmdlet.ThrowTerminatingError($errorRecord)
+                return
+            }
 
-        if (-not [System.IO.Directory]::Exists($resolved)) {
-            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
-                [System.ArgumentException]::new("Path is not a directory: '$resolved'."),
-                'PathNotDirectory',
-                [System.Management.Automation.ErrorCategory]::InvalidArgument,
-                $resolved
-            )
-            $PSCmdlet.ThrowTerminatingError($errorRecord)
-            return
+            # Targets are collected across the whole pipeline so that a batch of
+            # files shares one plan, one progress bar and one summary.
+            $targets.Add($target)
         }
+    }
+
+    end {
+        if ($targets.Count -eq 0) { return }
 
         Write-OpsxLog "Optimize-PSX v$moduleVersion" -Level Info -Phase
-        Write-OpsxLog "Target: $resolved" -Level Info
 
-        $index = Get-OpsxFileIndex -Path $resolved
+        $directories = [System.Collections.Generic.List[string]]::new()
+        $includeFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
+        $folderTargets = 0
+        $fileTargets = 0
+
+        foreach ($target in $targets) {
+            switch ($target.Status) {
+                'Directory' {
+                    $directories.Add($target.Path)
+                    $folderTargets++
+                    Write-OpsxLog "Target folder: $($target.Path)" -Level Info
+                }
+                'Archive' {
+                    $includeFiles.AddRange($target.Files)
+                    $fileTargets++
+                    Write-OpsxLog "Target archive: $($target.Path)" -Level Info
+                }
+                'DiscImage' {
+                    $includeFiles.AddRange($target.Files)
+                    $fileTargets++
+                    Write-OpsxLog "Target image: $($target.Path)" -Level Info
+                    if ($target.Message) { Write-OpsxLog $target.Message -Level Detail }
+                }
+                default {
+                    Write-OpsxLog "Ignoring '$($target.Path)': $($target.Message)" -Level Warning
+                }
+            }
+        }
+
+        if ($directories.Count -eq 0 -and $includeFiles.Count -eq 0) {
+            Write-OpsxLog 'No usable target was supplied; nothing to do.' -Level Warning
+            return
+        }
+
+        if ($SkipExtraction) {
+            foreach ($target in @($targets | Where-Object { $_.Status -eq 'Archive' })) {
+                Write-OpsxLog "Extraction is skipped, so '$([System.IO.Path]::GetFileName($target.Path))' will not be converted." -Level Warning
+            }
+        }
+
+        $index = Get-OpsxFileIndex -Path $directories -IncludeFile $includeFiles
         $initialBytes = $index.TotalBytes
         Write-OpsxLog "Indexed $($index.Count) file(s), $(Format-OpsxSize $initialBytes)" -Level Info
 
@@ -204,10 +270,19 @@ function Optimize-PSX {
         if (-not $SkipExtraction) {
             $extractions = @(Expand-OpsxArchive -Index $index -Force:$Force -Cmdlet $PSCmdlet)
 
-            # Extraction adds files the conversion phase must see, so the index
-            # is rebuilt rather than patched.
-            if (@($extractions | Where-Object { $_.Status -eq 'Extracted' }).Count -gt 0) {
-                $index = Get-OpsxFileIndex -Path $resolved
+            # Extraction adds files the conversion phase must see. A folder
+            # target already covers its own archives' output; an archive target
+            # needs its extraction folder walked explicitly.
+            $rootsBefore = $directories.Count
+            foreach ($extraction in $extractions) {
+                if ($extraction.Status -eq 'Failed') { continue }
+                if (-not [System.IO.Directory]::Exists($extraction.Target)) { continue }
+                if (-not ($directories -contains $extraction.Target)) { $directories.Add($extraction.Target) }
+            }
+
+            if ($directories.Count -gt $rootsBefore -or
+                @($extractions | Where-Object { $_.Status -eq 'Extracted' }).Count -gt 0) {
+                $index = Get-OpsxFileIndex -Path $directories -IncludeFile $includeFiles
                 Write-OpsxLog "Re-indexed after extraction: $($index.Count) file(s)" -Level Detail
             }
         }
@@ -218,8 +293,12 @@ function Optimize-PSX {
             $plan = Get-OpsxConversionPlan -Index $index -ChdmanInfo $chdman -Force:$Force `
                                            -RepairCueSheets:$RepairCueSheets -Cmdlet $PSCmdlet
 
+            # Media detection needs a representative path on the volume holding
+            # the images; a folder target is preferred when one is present.
+            $mediaProbe = if ($directories.Count -gt 0) { $directories[0] } else { $includeFiles[0].DirectoryName }
+
             $concurrency = Get-OpsxConcurrencyPlan -CpuBudget $CpuBudget -MaxConcurrency $MaxConcurrency `
-                                                   -ThreadsPerJob $ThreadsPerJob -TargetPath $resolved `
+                                                   -ThreadsPerJob $ThreadsPerJob -TargetPath $mediaProbe `
                                                    -IgnoreDiskType:$IgnoreDiskType -Sequential:$Sequential
 
             Show-OpsxPlan -Plan $plan -Concurrency $concurrency -Compression $Compression
@@ -245,12 +324,31 @@ function Optimize-PSX {
         }
 
         # --- Report -----------------------------------------------------
-        $finalIndex = Get-OpsxFileIndex -Path $resolved
+        # A folder target picks up the CHDs it produced by walking. A file
+        # target does not, so they are added explicitly and deduplicated.
+        $finalFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
+        $finalFiles.AddRange($includeFiles)
+        foreach ($job in $jobs) {
+            if ($job.Status -eq 'Converted' -and [System.IO.File]::Exists($job.OutputPath)) {
+                $finalFiles.Add([System.IO.FileInfo]::new($job.OutputPath))
+            }
+        }
+
+        $finalIndex = Get-OpsxFileIndex -Path $directories -IncludeFile $finalFiles
+
+        $scopeLabel = if ($fileTargets -eq 0) {
+            'Folder'
+        } elseif ($folderTargets -eq 0) {
+            'Target'
+        } else {
+            'Scope'
+        }
+
         $result = Write-OpsxSummary -Jobs $jobs -Extractions $extractions -Cleanup $cleanup `
                                     -InitialBytes $initialBytes -FinalBytes $finalIndex.TotalBytes `
                                     -Duration ([datetime]::Now - $startTime) `
+                                    -ScopeLabel $scopeLabel `
                                     -WhatIfMode:$WhatIfPreference
-
 
         if ($PassThru) { Write-Output $result }
     }

@@ -8,7 +8,7 @@
 RootModule = 'Optimize-PSX.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.0.0'
+ModuleVersion = '2.1.0'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Core')
@@ -55,6 +55,7 @@ FileList = @(
     'Private\Get-OpsxConversionPlan.ps1'
     'Private\Get-OpsxFileIndex.ps1'
     'Private\Get-OpsxMediaType.ps1'
+    'Private\Get-OpsxSheetScope.ps1'
     'Private\Initialize-OpsxLog.ps1'
     'Private\Invoke-ChdmanBatch.ps1'
     'Private\New-OpsxJob.ps1'
@@ -64,6 +65,7 @@ FileList = @(
     'Private\Remove-OpsxTempFile.ps1'
     'Private\Repair-CueSheet.ps1'
     'Private\Resolve-ChdmanBinary.ps1'
+    'Private\Resolve-OpsxTarget.ps1'
     'Private\Send-OpsxToRecycleBin.ps1'
     'Private\Show-OpsxPlan.ps1'
     'Private\Start-ChdmanProcess.ps1'
@@ -95,6 +97,24 @@ PrivateData = @{
 
         # ReleaseNotes of this module
         ReleaseNotes = @'
+2.1.0
+  - -Path now accepts files as well as folders. An archive target is expanded
+    into a sibling folder and its contents converted; a disc image target is
+    converted on its own. Several targets may be supplied in one run, either
+    as an array or through the pipeline.
+  - A track file target (.bin/.img and friends) is resolved to the sheet that
+    describes it, by base name or by track reference, so a lone track is never
+    compressed without the rest of the disc. Track files no sheet claims are
+    reported instead of silently skipped.
+  - A .chd target is reported as already converted; other file types are
+    ignored with the reason.
+  - The file index now merges folders with explicit files and deduplicates by
+    full path, so a file that also sits under a walked folder is counted once.
+  - An ISO consumed as a track by any sheet is no longer queued as a second,
+    stand-alone conversion.
+  - The storage section of the summary names its scope, so a file-targeted
+    run reports on its targets rather than on a folder it never walked.
+
 2.0.0
   - Refactored the monolithic .psm1 into Private\ and Public\ files with a
     thin loader, matching the layout used by the other modules here.

@@ -24,7 +24,8 @@ function Initialize-OpsxLog {
         [ValidateSet('Minimal', 'Normal', 'Detailed')]
         [string]$Verbosity = 'Normal',
 
-        [string]$Version = '2.0.0'
+        [Parameter(Mandatory)]
+        [string]$Version
     )
 
     $script:OpsxVerbosity = $Verbosity

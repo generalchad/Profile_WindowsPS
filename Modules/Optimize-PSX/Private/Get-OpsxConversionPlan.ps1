@@ -13,7 +13,9 @@ function Get-OpsxConversionPlan {
 
           An .iso is a job only when no sheet in the same directory shares its
           base name. A sheet's payload must never also be queued as its own job,
-          which would produce a duplicate CHD missing every other track.
+          which would produce a duplicate CHD missing every other track. For the
+          same reason an ISO that any sheet lists as a track is excluded, even
+          when the sheet is named differently.
 
           Track files (.bin/.img/.raw/.sub and friends) are never jobs. They are
           recorded as dependencies of the sheet that references them.
@@ -67,6 +69,11 @@ function Get-OpsxConversionPlan {
     # describes can be excluded in constant time.
     $sheetKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $sheetFiles = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
+
+    # Track files that some sheet already consumes. An ISO may be one of them
+    # under a base name that differs from the sheet's, so it is matched by full
+    # path rather than by the same-name rule below.
+    $sheetDependencies = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     foreach ($ext in $script:SheetExtensions) {
         if ($Index.ByExtension.ContainsKey($ext)) {
@@ -142,6 +149,8 @@ function Get-OpsxConversionPlan {
         $job = New-OpsxJob -Source $sheet -OutputPath $outputPath -Command $script:ChdmanCommandForSheets `
                            -Dependencies $dependencies -SourceBytes $sourceBytes
 
+        foreach ($dependency in $dependencies) { $null = $sheetDependencies.Add($dependency) }
+
         if ($skipReason) {
             $job.Action = 'Skip'
             $job.Reason = $skipReason
@@ -162,6 +171,11 @@ function Get-OpsxConversionPlan {
     # --- Standalone ISO jobs --------------------------------------------
     if ($Index.ByExtension.ContainsKey('.iso')) {
         foreach ($iso in $Index.ByExtension['.iso']) {
+            if ($sheetDependencies.Contains($iso.FullName)) {
+                Write-OpsxLog "Skipping '$($iso.Name)': used as a track by a sheet." -Level Detail
+                continue
+            }
+
             $key = [System.IO.Path]::Combine($iso.DirectoryName, $iso.BaseName)
             if ($sheetKeys.Contains($key)) {
                 Write-OpsxLog "Skipping '$($iso.Name)': described by a sheet of the same name." -Level Detail

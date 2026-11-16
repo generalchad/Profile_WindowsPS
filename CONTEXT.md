@@ -52,7 +52,7 @@ time one of them is used.
 | `New-CliCommandShortcut` | Creates a Desktop (or specified) `.lnk` that re-runs a recent non-destructive command from PSReadLine history. Defaults to the command before the invocation itself; `-Skip`/`-Scan`/`-Index` select an entry, `-List` inspects history, and a deny-list skips state-changing verbs and native tools (`-IncludeDestructive` opts out). |
 | `New-QRCode` | Renders text, URLs, and preset payloads (Wi-Fi, vCard, email, SMS, phone, geo) to a QR code in the console, a PNG/SVG file, or via the `Show-QRCode` WinForms dialog (loaded only when opened). CSV batch mode; the QRCoder library is downloaded on demand (`Install-QRCoder`) into `%LOCALAPPDATA%\New-QRCode\lib` and is never tracked. |
 | `New-ScanShare` | One-step SMB scan-to-folder setup (hardened local account locked to SMB network logon, folder, NTFS lockdown, `Everyone: Full Control` share, firewall), verified with a listener check and a credentialed write probe. Ships an optional `Show-ScanShare` WinForms dialog that drives it (loaded only when opened). Runs on PS 7 and Windows PowerShell 5.1; Windows 10/11/Server 2016+ (64-bit). |
-| `Optimize-PSX` | Extracts disc-image archives and compresses PS1/PS2, Saturn, and Dreamcast images to CHD. |
+| `Optimize-PSX` | Converts PS1/PS2, Saturn, and Dreamcast disc images to CHD, extracting archives first; targets folders, archives, or single images. |
 | `Optimize-VMX` | Tunes VMware `.vmx` files for network stability and legacy-OS compatibility. |
 | `ProfileTools` | Personal toolbox: functions, utilities, and static aliases, including `Measure-ProfileLoad`. |
 | `Rename-MediaFile` | Renames media, subtitles, and folders to Plex/Jellyfin standards. |

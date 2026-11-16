@@ -34,9 +34,12 @@ function Write-OpsxSummary {
     .PARAMETER Cleanup
         Cleanup summary from Remove-OpsxSource.
     .PARAMETER InitialBytes
-        Total folder size measured before processing.
+        Total size of the processed scope measured before processing.
     .PARAMETER FinalBytes
-        Total folder size measured after processing.
+        Total size of the processed scope measured after processing.
+    .PARAMETER ScopeLabel
+        Noun for the size figures, so a file-targeted run reports on its targets
+        rather than on a folder it never walked.
     .PARAMETER Duration
         Total elapsed run time.
     .OUTPUTS
@@ -56,6 +59,8 @@ function Write-OpsxSummary {
         [long]$InitialBytes = 0,
 
         [long]$FinalBytes = 0,
+
+        [string]$ScopeLabel = 'Folder',
 
         [timespan]$Duration = [timespan]::Zero,
 
@@ -128,8 +133,8 @@ function Write-OpsxSummary {
     }
 
     Write-OpsxLog 'Storage:' -Level Info -ForegroundColor Yellow
-    Write-OpsxLog "  Folder before    : $(Format-OpsxSize $InitialBytes)" -Level Info
-    Write-OpsxLog "  Folder after     : $(Format-OpsxSize $FinalBytes)" -Level Info
+    Write-OpsxLog ('{0,-19}: {1}' -f "  $ScopeLabel before", (Format-OpsxSize $InitialBytes)) -Level Info
+    Write-OpsxLog ('{0,-19}: {1}' -f "  $ScopeLabel after", (Format-OpsxSize $FinalBytes)) -Level Info
 
     if ($storageDelta -lt 0) {
         Write-OpsxLog "  Net change       : $(Format-OpsxSize $storageDelta) reclaimed" -Level Success
