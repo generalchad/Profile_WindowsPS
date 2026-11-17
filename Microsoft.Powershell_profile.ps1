@@ -6,6 +6,8 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
 # -----------------------------------------------------------------------------
+$ProfileLoadSw = [System.Diagnostics.Stopwatch]::StartNew()
+
 $ProfileRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($PROFILE) { Split-Path -Parent $PROFILE } else { $PSScriptRoot }
 if (-not $ProfileRoot) { $ProfileRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
 
@@ -20,7 +22,7 @@ if ($ProfileTrace) {
     # State lives in a hashtable so Mark can mutate it by reference regardless of
     # whether this profile is dot-sourced into global scope or re-sourced later.
     $ProfileTraceState = @{
-        Sw    = [System.Diagnostics.Stopwatch]::StartNew()
+        Sw    = $ProfileLoadSw
         Last  = 0.0
         Marks = [System.Collections.Generic.List[object]]::new()
     }
@@ -170,9 +172,11 @@ if ($ZoxideExe) {
 }
 if ($ProfileTrace) { Mark 'zoxide' }
 
+$ProfileLoadSw.Stop()
+$loadMs = [int][math]::Round($ProfileLoadSw.Elapsed.TotalMilliseconds)
+
 if ($ProfileTrace) {
-    $ProfileTraceState.Sw.Stop()
-    $total = [math]::Round($ProfileTraceState.Sw.Elapsed.TotalMilliseconds, 1)
+    $total = [math]::Round($ProfileLoadSw.Elapsed.TotalMilliseconds, 1)
     $ProfileTraceState.Marks.Add([pscustomobject]@{ Stage = 'TOTAL'; Ms = $total; TotalMs = $total })
     $report = $ProfileTraceState.Marks | Format-Table Stage, Ms, TotalMs -AutoSize | Out-String
     $log = Join-Path $env:TEMP 'pwsh-profile-trace.log'
@@ -180,4 +184,35 @@ if ($ProfileTrace) {
     if (-not [Console]::IsOutputRedirected) { Write-Host $report -ForegroundColor DarkCyan }
 }
 
-Write-Host "Profile Loaded." -ForegroundColor DarkGray
+if ($Host.UI.SupportsVirtualTerminal) {
+    # 0-500ms: violet (138,43,226) -> bright green (0,255,0)
+    # 500-1000ms: brightest green (0,255,0)
+    # 1000-1750ms: green -> yellow (255,255,0); 1750-2500ms+: yellow -> red (255,0,0)
+    if ($loadMs -lt 500) {
+        $t = [math]::Clamp($loadMs / 500.0, 0.0, 1.0)
+        $r = [int][math]::Round(138 * (1.0 - $t))
+        $g = [int][math]::Round(43 + (255 - 43) * $t)
+        $b = [int][math]::Round(226 * (1.0 - $t))
+    } elseif ($loadMs -le 1000) {
+        $r = 0; $g = 255; $b = 0
+    } elseif ($loadMs -lt 1750) {
+        $t = ($loadMs - 1000) / 750.0
+        $r = [int][math]::Round(255 * $t)
+        $g = 255
+        $b = 0
+    } else {
+        $t = [math]::Clamp(($loadMs - 1750) / 750.0, 0.0, 1.0)
+        $r = 255
+        $g = [int][math]::Round(255 * (1.0 - $t))
+        $b = 0
+    }
+    $esc = [char]27
+    Write-Host "Profile Loaded (" -NoNewline -ForegroundColor DarkGray
+    Write-Host "$esc[38;2;$r;$g;${b}m$loadMs ms$esc[0m" -NoNewline
+    Write-Host ")." -ForegroundColor DarkGray
+} else {
+    $loadColor = if ($loadMs -lt 500) { 'DarkMagenta' } elseif ($loadMs -le 1000) { 'Green' } elseif ($loadMs -lt 1750) { 'Yellow' } else { 'Red' }
+    Write-Host "Profile Loaded (" -NoNewline -ForegroundColor DarkGray
+    Write-Host "$loadMs ms" -NoNewline -ForegroundColor $loadColor
+    Write-Host ")." -ForegroundColor DarkGray
+}
